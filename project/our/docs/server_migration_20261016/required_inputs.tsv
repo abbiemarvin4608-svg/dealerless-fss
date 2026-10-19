@@ -1,0 +1,34 @@
+task	path	exists	allocated_bytes	category	note
+rnn_frozen_step	project/our/results/paper_folded_activation_20261013/ticket11/final-build/fixture	True	43397120	required_input	当前batch128输入、模型和整数契约
+rnn_frozen_step	project/our/results/sci_sirnn_resident_20261012/reference	True	1552384	required_input	非零hidden i16及来源
+rnn_frozen_step	project/our/results/ticket07_hybrid_full/sources	True	81920	required_source	冻结生成图和model header，源码白名单也收录
+rnn_frozen_step	project/our/results/online_optimization_20261014/build/runtime/runtime_manifest.json	True	12288	build_provenance	重建来源身份，不是可执行程序
+rnn_frozen_step	project/our/results/online_optimization_20261014/build/runtime/build_commands.json	True	24576	build_provenance	历史编译命令
+rnn_evidence	project/our/results/online_optimization_20261014/formal	True	2947096576	evidence	四行10query；含大轨迹，可冷热分离
+rnn_evidence	project/our/results/online_optimization_20261014/qualification	True	1328242688	evidence	零/非零hidden资格
+rnn_evidence	project/our/results/sci_sirnn_preprocessed_20261012/ticket08_fair	True	141938688	evidence	历史正式原生预处理对比
+cnn_accuracy	project/our/results/imagenet_resnet_20261015/data/val	True	6813941760	dataset_external_transfer	完整50000张验证图
+cnn_accuracy	project/our/results/imagenet_resnet_20261015/data/MANIFEST.json	True	4096	dataset_metadata	来源与验证清单
+cnn_accuracy	project/our/results/imagenet_resnet_20261015/data/class_to_idx.json	True	20480	dataset_metadata	类别映射
+cnn_accuracy	project/our/results/imagenet_resnet_20261015/data/labels.csv	True	3522560	dataset_metadata	标签
+cnn_accuracy	project/our/results/imagenet_resnet_20261015/data/ILSVRC2012_validation_ground_truth.txt	True	196608	dataset_metadata	官方标签
+cnn_accuracy	project/our/results/imagenet_resnet_20261015/data/meta.mat	True	180224	dataset_metadata	官方类别元数据
+cnn_accuracy	project/our/results/precision_motivation_final/data	True	1251631104	dataset_external_transfer	2000张训练校准图及抽取记录
+cnn_accuracy	project/our/results/precision_motivation_final/experiment1/calibration_manifest.json	True	512000	required_input	冻结训练校准清单
+cnn_accuracy	/home/jiang/.cache/torch/hub/checkpoints/resnet50-0676ba61.pth	True	102531072	weights_external_transfer	IMAGENET1K_V1，不能换V2
+cnn_accuracy	/home/jiang/.cache/torch/hub/checkpoints/resnet152-394f9c45.pth	True	241631232	weights_external_transfer	IMAGENET1K_V1
+cnn_resume	project/our/results/precision_motivation_final/experiment1/width_scan	True	827916288	checkpoint_and_evidence	配置、断点、证书和已完成验证
+cnn_resume	project/our/results/imagenet_resnet_20261015/accuracy	True	686051328	checkpoint_and_evidence	已完成32/12完整验证基线
+cnn_secure	project/our/results/imagenet_resnet_20261015/models/resnet50_w32_f12	True	417173504	required_input_external_transfer	固定图、parameters和audit
+cnn_secure	project/our/results/imagenet_resnet_20261015/models/resnet152_w32_f12	True	938950656	required_input_external_transfer	固定图、parameters和audit
+cnn_secure	project/our/results/imagenet_resnet_20261015/contract_fixtures/w32	True	61440	qualification_input	小图逐层整数资格
+cnn_secure	project/our/results/imagenet_resnet_20261015/final_migration/build/build.json	True	20480	build_provenance	当前CNN编译命令及身份
+motivation_evidence	project/our/results/precision_motivation_final/experiment2	True	53248	evidence	23/31位转换算子与开销表
+motivation_evidence	project/our/results/precision_motivation_final/primitive_ablation	True	29671424	evidence	复用及缺失位宽原语补测，build可重建
+motivation_evidence	project/our/results/ticket10_width_sweep	True	7901184	evidence	已有位宽扫描和不分段OOM证据
+rnn_full_reproduction	/home/jiang/EzPC/SIRNN/reproduction/models/Google-30-FastGRNN-r16-u35-h100	True	200704	required_input	训练权重、mean/std、配置、历史
+rnn_full_reproduction	/home/jiang/EzPC/SIRNN/reproduction/data/Google-30-processed	True	2379960320	dataset_external_transfer	完整NPY、样本清单和特征来源
+rnn_full_reproduction	/home/jiang/EzPC/SIRNN/reproduction/data/Google-30-v0.01	True	2115305472	dataset_optional_if_frozen	原始音频；仅冻结单步不需要
+rnn_full_reproduction	/home/jiang/EzPC/SIRNN/reproduction/data/speech_commands_v0.01.tar.gz	True	1489100800	source_archive	保留一个来源副本
+rnn_full_reproduction	/home/jiang/EzPC/SIRNN/reproduction/SeeDot/temp/Predictor/input/X.csv	True	226009088	generated_input	完整SeeDot测试输入
+rnn_full_reproduction	/home/jiang/EzPC/SIRNN/reproduction/SeeDot/temp/Predictor/input/Y.csv	True	20480	generated_input	完整SeeDot测试标签

@@ -1,0 +1,1 @@
+SEGFSS_SCI_1 { global: segfss_sci_*; local: *; };

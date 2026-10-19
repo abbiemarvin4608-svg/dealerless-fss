@@ -1,0 +1,312 @@
+#include "library_fixed.h"
+#include "globals.h"
+#include "measurement.h"
+#include "native_workers.h"
+#include "native_query_materials.h"
+#include "Math/math-functions.h"
+#include "model_bias.h"
+#include <fstream>
+#include <iomanip>
+#include <algorithm>
+#include <sys/resource.h>
+using namespace std;
+int party = 1, port = 42400, num_threads = 1;
+int32_t bitlength = 32;
+string address = "127.0.0.1";
+bool diagnostic = false;
+int step_index = -1;
+extern void reconstruct(int64_t*, int64_t*, int32_t, int32_t, int);
+
+uint64_t kernel_memory_bytes(const char* field) {
+    ifstream status("/proc/self/status");string key,unit;uint64_t value;
+    while(status >> key) {
+        if(key==string(field)+":") { status >> value >> unit;return value*1024; }
+        string rest;getline(status,rest);
+    }
+    return 0;
+}
+
+void read_exact(ifstream& input, int64_t* output, int size) {
+    vector<int16_t> values(size);
+    input.read(reinterpret_cast<char*>(values.data()), size * sizeof(int16_t));
+    if (input.gcount() != size * int(sizeof(int16_t)))
+        throw runtime_error("private file has insufficient values");
+    copy(values.begin(), values.end(), output);
+}
+
+void inspect(const char* op, const char* tensor, int64_t* values,
+             int rows, int cols, int bits) {
+    if (!diagnostic || sdcf_planning::active()) return;
+    vector<int64_t> opened(rows * cols);
+    reconstruct(values, opened.data(), rows, cols, bits);
+    if (party == 2) {
+        cout << "TENSOR " << step_index << " " << op << " " << tensor
+             << " " << bits << " " << rows << " " << cols;
+        for (auto value : opened) cout << " " << value;
+        cout << "\n";
+    }
+}
+
+vector<sdcf_runtime::Layer> public_schedule(int batch, int steps, bool model_bias_precomputed) {
+    vector<sdcf_runtime::Layer> schedule;
+    for (int t = 0; t < steps; ++t) {
+        RECURRENT_SCHEDULE
+    }
+    if (steps == 99) {
+        int t = steps;
+        CLASSIFIER_SCHEDULE
+    }
+    return schedule;
+}
+
+int main(int argc, char** argv) {
+    try {
+        cout << setprecision(12);
+        if (argc == 2 && string(argv[1]) == "--describe") {
+            cout << "{\"backend_api\":1,\"measurement_api\":2,\"round_trace_api\":1,\"backends\":[";
+            bool first = true;
+            for (const auto& backend : sdcf_backend::supported_backends()) {
+                if (!first) cout << ',';
+                first = false; cout << '"' << backend << '"';
+            }
+            cout << "],\"paper_activation_api\":1,\"paper_activation_algorithm\":\"folded_sigma_f12_q10\",\"paper_lut_index_bits\":10,\"paper_lut_entries\":1024,\"paper_lut_families\":[\"full_q_arithmetic\",\"segmented_boolean_tensor_b2a\"],\"paper_sign_backends\":[\"BitDec\",\"segmented_fss\"],\"supports_native_preprocessing\":true,\"native_preprocessing_steps\":[1],\"supports_model_bias_precomputation\":true,\"steps\":[1,99],\"max_batch\":256,\"threads\":1,\"activation_workers\":[1,2,3,4],\"max_compute_participants\":4,\"resident_activation_workers\":true,\"batched_aes\":true,\"graph_modes\":[\"sequential\",\"isolated\",\"parallel\"],\"graph_openings\":[\"independent\",\"batched\"],\"graph_branches\":2,\"branch_compute_limit\":2,\"observed_ot_teams\":true}\n";
+            return 0;
+        }
+        if (argc != 11)
+            throw runtime_error("party port owned-file start batch steps secure|diagnostic queries backend hidden-file|none");
+        party = stoi(argv[1]); port = stoi(argv[2]);
+        const int start = stoi(argv[4]), batch = stoi(argv[5]), steps = stoi(argv[6]);
+        const string mode = argv[7], backend = argv[9];
+        diagnostic = mode == "diagnostic";
+        const int queries = stoi(argv[8]);
+        if ((party != 1 && party != 2) || batch < 1 || batch > 256 || start < 0 ||
+            (steps != 1 && steps != 99) || queries < 1 ||
+            (mode != "secure" && mode != "diagnostic"))
+            throw runtime_error("invalid execution contract");
+        sdcf_backend::validate(backend);
+        const char* bias_option = std::getenv("SDCF_MODEL_BIAS_PRECOMPUTE");
+        if (bias_option && string(bias_option) != "0" && string(bias_option) != "1")
+            throw runtime_error("model bias preparation must be 0 or 1");
+        const bool model_bias_precomputed = bias_option && string(bias_option) == "1";
+#ifndef DIV_RESCALING
+        if (model_bias_precomputed)
+            throw runtime_error("exact model bias preparation requires SCI DIV_RESCALING");
+#endif
+        const bool native_preprocessing = backend == "SCI_preprocessed" || sdcf_preprocess::enabled();
+        if (backend == "SCI" && native_preprocessing)
+            throw runtime_error("default SCI control requires native preprocessing disabled");
+        if (native_preprocessing && steps != 1)
+            throw runtime_error("native preprocessing supports only the frozen single-step entry");
+        const char* graph_mode = std::getenv("SDCF_GRAPH_MODE");
+        if (steps != 1 && graph_mode && std::string(graph_mode) != "sequential")
+            throw runtime_error("isolated graph modes support only the frozen single-step entry");
+        const char* graph_openings = std::getenv("SDCF_GRAPH_OPENINGS");
+        if (steps != 1 && graph_openings && std::string(graph_openings) != "independent")
+            throw runtime_error("batched graph openings support only the frozen single-step entry");
+        sdcf_round::initialize(party);
+        cout << "ROUND_TRACE_META {\"active\":" << (sdcf_round::active() ? "true" : "false")
+             << ",\"version\":1,\"definition\":\"paired causal send flights\"}\n";
+        sdcf_round::phase_begin("application_io", -1);
+        const auto total_start = sdcf_measure::Clock::now();
+        auto checkpoint = sdcf_measure::point();
+        const auto first_query_start = checkpoint;
+        ifstream input(argv[3], ios::binary);
+        if (!input) throw runtime_error("cannot open party-owned input");
+        vector<int64_t> X_storage(batch * 3168, 0), W1_storage(512), W2_storage(1600),
+            U1_storage(3500), U2_storage(3500), Bg_storage(batch * 100),
+            Bh_storage(batch * 100), FC_storage(3000), FCbias_storage(batch * 30);
+        int64_t *W1 = W1_storage.data(), *W2 = W2_storage.data(),
+            *U1 = U1_storage.data(), *U2 = U2_storage.data(),
+            *Bg = Bg_storage.data(), *Bh = Bh_storage.data(),
+            *FC = FC_storage.data(), *FCbias = FCbias_storage.data();
+        if (party == 1) {
+            read_exact(input, W1, 512); read_exact(input, W2, 1600);
+            read_exact(input, U1, 3500); read_exact(input, U2, 3500);
+            read_exact(input, Bg, 100); read_exact(input, Bh, 100);
+            read_exact(input, FC, 3000); read_exact(input, FCbias, 30);
+            for (int row = 1; row < batch; ++row) {
+                copy(Bg, Bg + 100, Bg + row * 100);
+                copy(Bh, Bh + 100, Bh + row * 100);
+                copy(FCbias, FCbias + 30, FCbias + row * 30);
+            }
+        }
+        DECLARATIONS
+        int64_t tmp9bw16 = 16654, tmp10bw16 = 26006, tmp32 = 16384;
+        const auto schedule = public_schedule(batch, steps, model_bias_precomputed);
+        sdcf_measure::report("application_io", -1, checkpoint);
+        sdcf_round::phase_begin("model_prepare", -1);
+        checkpoint = sdcf_measure::point();
+        // The runner owns one immutable model per process.  Prepared constants
+        // have the same lifetime and are rebuilt on every model load, including
+        // model/quantization changes; they never contain query randomness.
+        segfss::model::ExactBiasMaterial model_bias;
+        constexpr uint64_t model_version = 1;
+        if (model_bias_precomputed && party == 1) {
+            model_bias = segfss::model::prepareExactBias(
+                vector<int64_t>(Bg, Bg + 100), vector<int64_t>(Bh, Bh + 100), model_version);
+            const auto gate = segfss::model::broadcastBias(model_bias.gate0, size_t(batch));
+            const auto candidate = segfss::model::broadcastBias(model_bias.gate1, size_t(batch));
+            copy(gate.begin(), gate.end(), Bg);
+            copy(candidate.begin(), candidate.end(), Bh);
+        }
+        cout << "MODEL_BIAS_PREPARATION {\"enabled\":" << (model_bias_precomputed ? "true" : "false")
+             << ",\"owner\":1,\"model_version\":" << model_version
+             << ",\"scope\":\"immutable_model_process\",\"input_bits\":16,\"output_bits\":16"
+             << ",\"divisor\":8,\"rounding\":\"toward_zero\",\"bias_vectors\":2,\"values_per_vector\":100"
+             << ",\"batch\":" << batch << ",\"cached_ring_bytes\":" << model_bias.residentBytes()
+             << ",\"broadcast_storage_bytes\":" << (Bg_storage.size() + Bh_storage.size()) * sizeof(int64_t)
+             << ",\"removed_query_truncation_elements\":" << (model_bias_precomputed ? 2 * batch * 100 : 0)
+             << ",\"query_randomness_cached\":false}\n";
+        sdcf_measure::report("model_prepare", -1, checkpoint);
+        sdcf_round::phase_begin("setup", -1);
+        checkpoint = sdcf_measure::point();
+        initialize();
+        const int local_bias_configuration = int(model_bias_precomputed);
+        int remote_bias_configuration = -1;
+        if (party == 1) {
+            io->send_data(&local_bias_configuration, sizeof(local_bias_configuration));
+            io->recv_data(&remote_bias_configuration, sizeof(remote_bias_configuration));
+        } else {
+            io->recv_data(&remote_bias_configuration, sizeof(remote_bias_configuration));
+            io->send_data(&local_bias_configuration, sizeof(local_bias_configuration));
+        }
+        if (remote_bias_configuration != local_bias_configuration)
+            throw runtime_error("model bias preparation configuration differs between parties");
+        sdcf_native::setup(party, port, address, *mathArr[0]);
+        uint64_t sigmoid_count=0,tanh_count=0;
+        for(const auto& layer:schedule) {
+            if(layer.function=="Sigmoid")sigmoid_count+=layer.count;
+            if(layer.function=="TanH")tanh_count+=layer.count;
+        }
+        if(sdcf_dpf::reserve_schedule)sdcf_dpf::reserve_schedule(sigmoid_count,tanh_count);
+        if(sdcf_folded::reserve_schedule)sdcf_folded::reserve_schedule(sigmoid_count,tanh_count);
+        sdcf_backend::setup(backend, party, schedule);
+        vector<TripleGenerator*> triple_generators;
+        if (native_preprocessing) for (int slot = 0; slot < sdcf_native::context_count(); ++slot) {
+            auto& math = sdcf_native::context(slot);
+            sdcf_planning::register_pack(math.otpack, slot);
+            triple_generators.push_back(math.aux->mill->triple_gen);
+        }
+        sdcf_measure::report("setup", -1, checkpoint);
+        vector<int64_t> promoted(batch * 30), indices(batch), predictions(batch);
+        for (int query = 0; query < queries; ++query) {
+            if (model_bias_precomputed && party == 1 && !model_bias.validFor(model_version))
+                throw runtime_error("prepared model bias is stale");
+            sdcf_round::phase_begin("offline", query);
+            checkpoint = sdcf_measure::point();
+            const auto query_start = checkpoint;
+            auto run_graph = [&](bool planning) {
+                PLANNING_SHADOWS
+                size_t cursor = 0;
+                for (int t = 0; t < steps; ++t) {
+                    step_index = t;
+                    if (!planning) for (int row = 0; row < batch; ++row)
+                        copy(X_storage.data() + row * 3168 + t * 32,
+                             X_storage.data() + row * 3168 + (t + 1) * 32,
+                             tmp15bw16 + row * 32);
+                    RECURRENT_CALLS
+                }
+                if (steps == 99) {
+                    step_index = steps;
+                    CLASSIFIER_CALLS
+                    xt->s_extend(batch * 30, reinterpret_cast<uint64_t*>(tmp40bw8),
+                                 reinterpret_cast<uint64_t*>(promoted.data()), 8, 16);
+                    for (int row = 0; row < batch; ++row)
+                        ArgMax(1, 30, 16, 8, promoted.data() + row * 30, indices.data() + row);
+                }
+                if (cursor != schedule.size()) throw runtime_error("public schedule not fully consumed");
+            };
+            sdcf_preprocess::begin_prepare(query, native_preprocessing);
+            if (native_preprocessing) {
+                const auto before = sdcf_measure::point();
+                const auto prg_before = sdcf_planning::prg_blocks.load();
+                sdcf_planning::begin();
+                run_graph(true);
+                const auto public_plan = sdcf_planning::end();
+                const auto after = sdcf_measure::point();
+                if (before.sent != after.sent || before.received != after.received ||
+                    before.native_epoch != after.native_epoch || before.offline_epoch != after.offline_epoch ||
+                    before.dpf_epoch != after.dpf_epoch || before.folded_epoch != after.folded_epoch ||
+                    prg_before != sdcf_planning::prg_blocks.load())
+                    throw runtime_error("public graph planning changed protocol state");
+                cout << "NATIVE_PLAN_PURITY {\"query\":" << query
+                     << ",\"separate_public_buffers\":true,\"sent_bytes\":0,\"received_bytes\":0,\"generation_delta\":0,\"bridge_generation_delta\":0,\"prg_blocks_delta\":0}\n";
+                sdcf_planning::compare_plan(io, party, public_plan);
+            }
+            {
+                sdcf_preprocess::GenerationPurposeScope purpose(native_preprocessing);
+                sdcf_backend::prepare(query, schedule);
+            }
+            if (native_preprocessing) sdcf_planning::prepare_query_materials(query, triple_generators);
+            sdcf_preprocess::seal_prepare(query);
+            io->sync();
+            sdcf_preprocess::material_ready(query);
+            sdcf_measure::report("offline", query, checkpoint);
+            sdcf_round::phase_begin("input", query);
+            checkpoint = sdcf_measure::point();
+            sdcf_preprocess::begin_input(query);
+            FILL_GENERATED
+            if (party == 2) {
+                input.clear(); input.seekg(int64_t(start) * 3168 * sizeof(int16_t));
+                read_exact(input, X_storage.data(), batch * 3168);
+                if (string(argv[10]) != "none") {
+                    ifstream hidden(argv[10], ios::binary);
+                    read_exact(hidden, tmp11bw16, batch * 100);
+                }
+            }
+            sdcf_measure::report("input", query, checkpoint);
+            sdcf_round::phase_begin("ready", query);
+            checkpoint = sdcf_measure::point();
+            io->sync();
+            sdcf_measure::report("ready", query, checkpoint);
+            sdcf_round::phase_begin("online", query);
+            checkpoint = sdcf_measure::point();
+            sdcf_preprocess::enter_online(query);
+            sdcf_backend::enter_online(query);
+            run_graph(false);
+            sdcf_backend::leave_online(query);
+            sdcf_triples::balance(query);
+            if (sdcf_dpf::balance) sdcf_dpf::balance(query);
+            if (sdcf_folded::balance) sdcf_folded::balance(query);
+            sdcf_preprocess::leave_online(query);
+            io->sync();
+            sdcf_measure::report("online", query, checkpoint);
+            sdcf_round::phase_begin("output", query);
+            checkpoint = sdcf_measure::point();
+            if (steps == 99) {
+                reconstruct(indices.data(), predictions.data(), batch, 1, 8);
+            } else {
+                vector<int64_t> hidden(batch * 100);
+                reconstruct(tmp11bw16, hidden.data(), batch, 100, 16);
+            }
+            io->sync();
+            sdcf_preprocess::finish_query(query);
+            sdcf_measure::report("output", query, checkpoint);
+            sdcf_measure::report("query_total", query, query_start);
+            if (query == 0) sdcf_measure::report("first_query", -1, first_query_start);
+            if (party == 2 && steps == 99)
+                for (int row = 0; row < batch; ++row)
+                    cout << "PRED " << query << " " << start + row << " " << predictions[row] << "\n";
+            for (const auto& layer : schedule)
+                cout << "COVERAGE {\"query\":" << query << ",\"index\":" << layer.index
+                     << ",\"step\":" << layer.step << ",\"operator\":\"" << layer.operator_name
+                     << "\",\"batch\":" << batch << ",\"elements\":" << layer.count
+                     << ",\"sample_groups\":1,\"output_bits\":" << layer.output_bits << "}\n";
+        }
+        sdcf_round::phase_begin("teardown", -1);
+        checkpoint = sdcf_measure::point();
+        sdcf_backend::finish(); sdcf_native::finish(); finalize();
+        sdcf_measure::report("teardown", -1, checkpoint);
+        sdcf_round::finish();
+        struct rusage usage; getrusage(RUSAGE_SELF, &usage);
+        cout << "FINISHED {\"party\":" << party << ",\"status\":\"complete\",\"total_seconds\":"
+             << chrono::duration<double>(sdcf_measure::Clock::now() - total_start).count()
+             << ",\"peak_rss_kib\":" << usage.ru_maxrss
+             << ",\"vm_peak_bytes\":" << kernel_memory_bytes("VmPeak")
+             << ",\"vm_size_bytes\":" << kernel_memory_bytes("VmSize") << "}\n";
+        return 0;
+    } catch (const exception& error) {
+        cerr << "SDCF_RUNTIME_ERROR " << error.what() << "\n";
+        return 2;
+    }
+}

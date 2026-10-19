@@ -1,0 +1,295 @@
+{
+  "feature": "multiwidth-dealerless-inference",
+  "source": "project/our/REQUIREMENTS_MULTIWIDTH_DEALERLESS_INFERENCE.md",
+  "date": "2026-10-08",
+  "status": "partially-completed",
+  "tickets": [
+    {
+      "id": "01",
+      "slug": "google30-native-replay",
+      "title": "回放 Google-30 原生整数图并冻结数值契约",
+      "blockers": [],
+      "file": "01-google30-native-replay.md",
+      "status": "completed",
+      "completed_date": "2026-10-08",
+      "report": "project/our/results/ticket01_native_replay/REPORT_CN.md"
+    },
+    {
+      "id": "02",
+      "slug": "google30-independent-quality",
+      "title": "生成独立评估的 Google-30 质量产物",
+      "blockers": [],
+      "file": "02-google30-independent-quality.md",
+      "status": "completed",
+      "completed_date": "2026-10-08",
+      "report": "project/our/results/ticket02_independent_quality/REPORT_CN.md"
+    },
+    {
+      "id": "03",
+      "slug": "paper-current-scope",
+      "title": "修正当前论文的已完成范围",
+      "blockers": [],
+      "file": "03-paper-current-scope.md",
+      "status": "completed",
+      "completed_date": "2026-10-08",
+      "report": "project/our/results/ticket03_paper_scope/REPORT_CN.md"
+    },
+    {
+      "id": "04",
+      "slug": "sci-measurement",
+      "title": "打通 SCI 真实推理的完整计量",
+      "blockers": [
+        "01"
+      ],
+      "file": "04-sci-measurement.md",
+      "status": "completed",
+      "completed_date": "2026-10-08",
+      "report": "project/our/results/ticket04_sci_measurement/REPORT_CN.md"
+    },
+    {
+      "id": "05",
+      "slug": "sci-segmented-compare",
+      "title": "在 SCI 中接通一次分段比较或 MSB",
+      "blockers": [
+        "01"
+      ],
+      "file": "05-sci-segmented-compare.md",
+      "status": "completed",
+      "completed_date": "2026-10-08",
+      "report": "project/our/results/ticket05_segmented_msb/REPORT_CN.md"
+    },
+    {
+      "id": "06",
+      "slug": "hybrid-fastgrnn-step",
+      "title": "验证 SCI + ours 单个 FastGRNN 时间步",
+      "blockers": [
+        "05"
+      ],
+      "file": "06-hybrid-fastgrnn-step.md",
+      "status": "completed",
+      "completed_date": "2026-10-08",
+      "report": "project/our/results/ticket06_hybrid_step/REPORT_CN.md"
+    },
+    {
+      "id": "07",
+      "slug": "hybrid-google30-full",
+      "title": "完成 SCI + ours 整网一致性",
+      "blockers": [
+        "02",
+        "06"
+      ],
+      "file": "07-hybrid-google30-full.md",
+      "status": "completed",
+      "completed_date": "2026-10-08",
+      "report": "project/our/results/ticket07_hybrid_full/REPORT_CN.md"
+    },
+    {
+      "id": "08",
+      "slug": "mpspdz-fastgrnn-step",
+      "title": "接通 MP-SPDZ 单个 FastGRNN 时间步",
+      "blockers": [
+        "01"
+      ],
+      "file": "08-mpspdz-fastgrnn-step.md",
+      "status": "completed",
+      "completed_date": "2026-10-08",
+      "report": "project/our/results/ticket08_mpspdz_step/REPORT_CN.md"
+    },
+    {
+      "id": "09",
+      "slug": "mpspdz-google30-full",
+      "title": "完成 MP-SPDZ Google-30 安全推理",
+      "blockers": [
+        "02",
+        "08"
+      ],
+      "file": "09-mpspdz-google30-full.md",
+      "status": "partial-user-time-budget",
+      "report": "project/our/results/ticket09_mpspdz_full/REPORT_CN.md",
+      "remaining": "Full 6798-sample secure evaluation and matched formal network measurement unavailable under bounded user budget.",
+      "completed_date": "2026-10-08"
+    },
+    {
+      "id": "10",
+      "slug": "comparison-width-sweep",
+      "title": "测量比较位宽与分段数成本曲线",
+      "blockers": [
+        "04",
+        "05"
+      ],
+      "file": "10-comparison-width-sweep.md",
+      "status": "completed",
+      "completed_date": "2026-10-08",
+      "report": "project/our/results/ticket10_width_sweep/REPORT_CN.md"
+    },
+    {
+      "id": "11",
+      "slug": "google30-two-backends",
+      "title": "完成 Google-30 双后端性能对照",
+      "blockers": [
+        "04",
+        "07",
+        "10"
+      ],
+      "file": "11-google30-two-backends.md",
+      "status": "completed",
+      "report": "project/our/results/ticket11_comparison/REPORT_CN.md",
+      "completed_date": "2026-10-08"
+    },
+    {
+      "id": "12",
+      "slug": "google30-three-backends",
+      "title": "补齐 Google-30 三后端主表",
+      "blockers": [
+        "09",
+        "11"
+      ],
+      "file": "12-google30-three-backends.md",
+      "status": "partial-mpspdz-unavailable",
+      "report": "project/our/results/ticket12_main_table/REPORT_CN.md",
+      "completed_date": "2026-10-08",
+      "remaining": "SCI and SCI+ours rows are available; MP-SPDZ is unavailable, so no complete three-backend ranking."
+    },
+    {
+      "id": "13",
+      "slug": "uniform16-quality",
+      "title": "完成统一存储 16 位精度闭环",
+      "blockers": [
+        "01",
+        "02"
+      ],
+      "file": "13-uniform16-quality.md"
+    },
+    {
+      "id": "14",
+      "slug": "uniform32-quality",
+      "title": "完成统一存储 32 位精度闭环",
+      "blockers": [
+        "13"
+      ],
+      "file": "14-uniform32-quality.md"
+    },
+    {
+      "id": "15",
+      "slug": "strict-ring-diagnostic",
+      "title": "完成严格同环数值诊断",
+      "blockers": [
+        "14"
+      ],
+      "file": "15-strict-ring-diagnostic.md"
+    },
+    {
+      "id": "16",
+      "slug": "width-secure-cost",
+      "title": "比较位宽配置的真实安全成本",
+      "blockers": [
+        "07",
+        "09",
+        "10",
+        "14"
+      ],
+      "file": "16-width-secure-cost.md"
+    },
+    {
+      "id": "17",
+      "slug": "resnet50-secure-block",
+      "title": "接通 ResNet-50 安全残差块",
+      "blockers": [
+        "11"
+      ],
+      "file": "17-resnet50-secure-block.md"
+    },
+    {
+      "id": "18",
+      "slug": "resnet50-full",
+      "title": "完成 ResNet-50 整网验证",
+      "blockers": [
+        "17"
+      ],
+      "file": "18-resnet50-full.md"
+    },
+    {
+      "id": "19",
+      "slug": "resnet50-performance",
+      "title": "完成 ResNet-50 双轨性能结果",
+      "blockers": [
+        "18"
+      ],
+      "file": "19-resnet50-performance.md"
+    },
+    {
+      "id": "20",
+      "slug": "resnet152-extension",
+      "title": "扩展 ResNet-152 质量与成本验证",
+      "blockers": [
+        "19"
+      ],
+      "file": "20-resnet152-extension.md"
+    },
+    {
+      "id": "21",
+      "slug": "paper-evidence-update",
+      "title": "根据完成证据更新论文主张与实验",
+      "blockers": [
+        "03",
+        "12",
+        "15",
+        "16",
+        "20"
+      ],
+      "file": "21-paper-evidence-update.md"
+    }
+  ],
+  "approval_date": "2026-10-08",
+  "published_dir": ".scratch/multiwidth-dealerless-inference/issues",
+  "published_status": "ready-for-agent",
+  "validation": {
+    "ticket_count": 21,
+    "acceptance_criteria_count": 175,
+    "acyclic": true,
+    "initial_frontier": [
+      "01",
+      "02",
+      "03"
+    ]
+  },
+  "execution": {
+    "date": "2026-10-08",
+    "requested_tickets": [
+      "04",
+      "05",
+      "06",
+      "07",
+      "08",
+      "09",
+      "10",
+      "11",
+      "12"
+    ],
+    "completed_tickets": [
+      "01",
+      "02",
+      "03",
+      "04",
+      "05",
+      "06",
+      "07",
+      "08",
+      "10",
+      "11"
+    ],
+    "in_progress_tickets": [],
+    "partial_tickets": [
+      "09",
+      "12"
+    ],
+    "next_frontier": [
+      "13"
+    ],
+    "later_tickets_started": false,
+    "report": "project/our/results/TICKETS_04_12_REPORT_CN.md",
+    "integration_branch": "integration/tickets-04-12",
+    "scope_note": "This invocation covers tickets 04–12 only; 13–21 are not started.",
+    "mpspdz_budget": "User selected bounded verification; MP-SPDZ unavailable for the main ranking; no multi-day background execution."
+  }
+}

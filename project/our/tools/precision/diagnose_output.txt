@@ -1,0 +1,156 @@
+Loading ResNet20...
+
+======================================================================
+STEP 1: Measuring activation ranges
+======================================================================
+
+Activation ranges (float32 model):
+Layer                                             Min          Max        Range
+------------------------------------------------------------------------------
+bn1                                           -3.3683       4.2558       7.6242
+conv1                                        -14.1863      14.7419      28.9281
+fc                                            -8.5132      20.4570      28.9702
+layer1.0.bn1                                  -6.5402       5.2009      11.7411
+layer1.0.bn2                                  -6.1844       9.1456      15.3301
+layer1.0.conv1                               -11.6205      12.1097      23.7303
+layer1.0.conv2                                -8.5800       8.7087      17.2887
+layer1.0.relu                                  0.0000       9.1456       9.1456
+layer1.1.bn1                                  -3.8928       2.9615       6.8543
+layer1.1.bn2                                  -5.6976       5.1499      10.8475
+layer1.1.conv1                                -9.2244       6.0908      15.3151
+layer1.1.conv2                                -3.4024       2.8236       6.2261
+layer1.1.relu                                  0.0000      10.9554      10.9554
+layer1.2.bn1                                  -3.2461       2.4083       5.6544
+layer1.2.bn2                                  -4.1849       2.7282       6.9131
+layer1.2.conv1                               -14.1462       8.8054      22.9517
+layer1.2.conv2                                -2.3214       1.8012       4.1226
+layer1.2.relu                                  0.0000      10.9113      10.9113
+layer2.0.bn1                                  -5.8152       4.7689      10.5841
+layer2.0.bn2                                  -5.5743       5.2473      10.8215
+layer2.0.conv1                               -14.8731      15.6673      30.5404
+layer2.0.conv2                                -6.7305       6.6604      13.3909
+layer2.0.relu                                  0.0000       7.7278       7.7278
+layer2.0.shortcut.0                           -4.1065       7.8759      11.9824
+layer2.0.shortcut.1                           -4.4355       6.1571      10.5926
+layer2.1.bn1                                  -3.9723       2.6963       6.6686
+layer2.1.bn2                                  -4.3561       3.7515       8.1077
+layer2.1.conv1                                -9.7424       6.3146      16.0569
+layer2.1.conv2                                -2.5939       2.6605       5.2544
+layer2.1.relu                                  0.0000       8.3801       8.3801
+layer2.2.bn1                                  -3.1564       2.5299       5.6863
+layer2.2.bn2                                  -5.7462       7.6450      13.3913
+layer2.2.conv1                                -9.4455       8.0765      17.5219
+layer2.2.conv2                                -2.0614       2.6740       4.7354
+layer2.2.relu                                  0.0000      13.5575      13.5575
+layer3.0.bn1                                  -3.2043       3.5523       6.7566
+layer3.0.bn2                                  -4.4482       5.7666      10.2147
+layer3.0.conv1                               -13.2668      12.3043      25.5711
+layer3.0.conv2                                -3.7622       4.8047       8.5669
+layer3.0.relu                                  0.0000       9.0846       9.0846
+layer3.0.shortcut.0                           -4.9608       5.1964      10.1572
+layer3.0.shortcut.1                           -3.1840       4.0179       7.2020
+layer3.1.bn1                                  -4.0739       3.8087       7.8826
+layer3.1.bn2                                  -6.2450       8.6779      14.9229
+layer3.1.conv1                                -6.3319       6.2072      12.5390
+layer3.1.conv2                                -2.9051       4.4370       7.3421
+layer3.1.relu                                  0.0000      13.2741      13.2741
+layer3.2.bn1                                  -3.8817       3.7002       7.5819
+layer3.2.bn2                                  -5.1300      10.9637      16.0938
+layer3.2.conv1                                -9.6390      13.3402      22.9793
+layer3.2.conv2                                -2.5437       5.7905       8.3342
+layer3.2.relu                                  0.0000      20.1255      20.1255
+relu                                           0.0000       4.2558       4.2558
+
+→ Max absolute activation: 20.4570
+→ Minimum integer bits needed: 6 (to represent range [-32, 32))
+
+======================================================================
+STEP 2: 2D precision sweep
+======================================================================
+Sweeping (integer_bits, fractional_bits) to decouple the two dimensions
+
+Testing int_bits=2, frac_bits=12 (ℓ=14)...
+  → Accuracy: 27.15%
+Testing int_bits=2, frac_bits=14 (ℓ=16)...
+  → Accuracy: 27.18%
+Testing int_bits=2, frac_bits=16 (ℓ=18)...
+  → Accuracy: 27.18%
+Testing int_bits=2, frac_bits=18 (ℓ=20)...
+  → Accuracy: 27.18%
+Testing int_bits=2, frac_bits=20 (ℓ=22)...
+  → Accuracy: 27.18%
+Testing int_bits=3, frac_bits=12 (ℓ=15)...
+  → Accuracy: 68.46%
+Testing int_bits=3, frac_bits=14 (ℓ=17)...
+  → Accuracy: 68.48%
+Testing int_bits=3, frac_bits=16 (ℓ=19)...
+  → Accuracy: 68.48%
+Testing int_bits=3, frac_bits=18 (ℓ=21)...
+  → Accuracy: 68.48%
+Testing int_bits=3, frac_bits=20 (ℓ=23)...
+  → Accuracy: 68.48%
+Testing int_bits=4, frac_bits=12 (ℓ=16)...
+  → Accuracy: 87.48%
+Testing int_bits=4, frac_bits=14 (ℓ=18)...
+  → Accuracy: 87.46%
+Testing int_bits=4, frac_bits=16 (ℓ=20)...
+  → Accuracy: 87.47%
+Testing int_bits=4, frac_bits=18 (ℓ=22)...
+  → Accuracy: 87.47%
+Testing int_bits=4, frac_bits=20 (ℓ=24)...
+  → Accuracy: 87.47%
+Testing int_bits=5, frac_bits=12 (ℓ=17)...
+  → Accuracy: 88.23%
+Testing int_bits=5, frac_bits=14 (ℓ=19)...
+  → Accuracy: 88.22%
+Testing int_bits=5, frac_bits=16 (ℓ=21)...
+  → Accuracy: 88.22%
+Testing int_bits=5, frac_bits=18 (ℓ=23)...
+  → Accuracy: 88.22%
+Testing int_bits=5, frac_bits=20 (ℓ=25)...
+  → Accuracy: 88.22%
+Testing int_bits=6, frac_bits=12 (ℓ=18)...
+  → Accuracy: 88.23%
+Testing int_bits=6, frac_bits=14 (ℓ=20)...
+  → Accuracy: 88.22%
+Testing int_bits=6, frac_bits=16 (ℓ=22)...
+  → Accuracy: 88.22%
+Testing int_bits=6, frac_bits=18 (ℓ=24)...
+  → Accuracy: 88.22%
+Testing int_bits=6, frac_bits=20 (ℓ=26)...
+  → Accuracy: 88.22%
+Testing int_bits=8, frac_bits=12 (ℓ=20)...
+  → Accuracy: 88.23%
+Testing int_bits=8, frac_bits=14 (ℓ=22)...
+  → Accuracy: 88.22%
+Testing int_bits=8, frac_bits=16 (ℓ=24)...
+  → Accuracy: 88.22%
+Testing int_bits=8, frac_bits=18 (ℓ=26)...
+  → Accuracy: 88.22%
+Testing int_bits=8, frac_bits=20 (ℓ=28)...
+  → Accuracy: 88.22%
+
+======================================================================
+Results: Accuracy (%) for (int_bits, frac_bits) grid
+======================================================================
+int_bits \ frac_bits      12      14      16      18      20     ℓ=total
+------------------------------------------------------------------------------------------
+2                      27.1%   27.2%   27.2%   27.2%   27.2%  (2+16=18)
+3                      68.5%   68.5%   68.5%   68.5%   68.5%  (3+16=19)
+4                      87.5%   87.5%   87.5%   87.5%   87.5%  (4+16=20)
+5                      88.2%   88.2%   88.2%   88.2%   88.2%  (5+16=21)
+6                      88.2%   88.2%   88.2%   88.2%   88.2%  (6+16=22)
+8                      88.2%   88.2%   88.2%   88.2%   88.2%  (8+16=24)
+
+======================================================================
+ANALYSIS
+======================================================================
+The original E0 experiment fixed s=16 and varied ℓ.
+With s=16, the cliff at ℓ=20 corresponds to int_bits=4=4.
+
+This 2D sweep shows whether the cliff is driven by:
+  - Integer overflow (vertical axis): need ≥4 integer bits
+  - Fractional precision (horizontal axis): need ≥16 fractional bits
+
+If accuracy is high across the frac_bits=16 column for int_bits≥4,
+then the cliff is purely integer-driven, NOT a precision requirement.

@@ -1,0 +1,43 @@
+PROBLEM: Unsigned vs Signed Comparison
+======================================
+
+Root Cause:
+- DPF-based comparison evaluates 1{x < r} using UNSIGNED semantics
+- For x = -4096 (0xFFFFF000), threshold = 0 (0x00000000)
+- Unsigned: 0xFFFFF000 > 0x00000000 → returns 0 (false)
+- Signed:   -4096 < 0 → should return 1 (true)
+
+Solution Options:
+=================
+
+Option 1: MSB Flip (Standard Technique)
+----------------------------------------
+Convert signed comparison to unsigned by flipping the MSB:
+  signed(x) < signed(r)  ⟺  unsigned(x ^ MSB) < unsigned(r ^ MSB)
+
+Implementation:
+- In piecewiseCompareOffline: threshold_adjusted = threshold ^ (1ULL << 31)
+- In piecewiseCompareOnline: x_adjusted = x ^ (1ULL << 31)
+- Then perform unsigned comparison
+
+Why this works:
+  Original (signed):     -4096 < 0
+  Flip MSB:              0x7FFFF000 < 0x80000000
+  Unsigned comparison:   2147479552 < 2147483648 → TRUE ✓
+
+Option 2: Use BitDec for Sign Only
+-----------------------------------
+Keep piecewise comparison for |x| < bound
+Use simple MSB check for sign (1 round via reconstruct + local check)
+
+Option 3: Two's Complement Adjustment
+--------------------------------------
+Adjust threshold by adding 2^31 to both sides
+More complex, similar to Option 1
+
+RECOMMENDATION: Option 1 (MSB Flip)
+====================================
+- Standard technique in secure comparison
+- No additional rounds
+- Works with existing DPF infrastructure
+- Simple to implement and verify

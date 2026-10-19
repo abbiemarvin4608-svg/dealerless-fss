@@ -1,0 +1,40 @@
+[
+  {
+    "path": "/home/jiang/EzPC",
+    "head": "f24bf3e022dde3493cf0ffe3ebd92dd73936b734",
+    "tracked_status": [
+      "M GPU-MPC/ext/sytorch/include/sytorch/backend/backend.h",
+      " M GPU-MPC/ext/sytorch/include/sytorch/module.h",
+      " M SCI/cmake/SCIConfig.cmake",
+      " m SCI/extern/SEAL",
+      " M setup_env_and_build.sh"
+    ]
+  },
+  {
+    "path": "/home/jiang/EzPC/SIRNN/EdgeML",
+    "head": "81025fce8ba28707eabe72e11bf3987a8d745608",
+    "tracked_status": []
+  },
+  {
+    "path": "/home/jiang/EzPC/SIRNN/EdgeML-sirnn",
+    "head": "7e5f88db82b28fabb447d4885c8e88a945b8fd1d",
+    "tracked_status": []
+  },
+  {
+    "path": "/home/jiang/external-baselines/SiRNN",
+    "head": "f24bf3e022dde3493cf0ffe3ebd92dd73936b734",
+    "tracked_status": []
+  },
+  {
+    "path": "/home/jiang/dealerless-lunwen/project/dealerless-FSS_public",
+    "head": "e8fefb537253ee5b0317ea484c934656f09a66f5",
+    "tracked_status": []
+  },
+  {
+    "path": "/home/jiang/EzPC/SCI/extern/SEAL",
+    "head": "1d5c8169aa5aca9deb75c4079e53ea8d5e94007d",
+    "tracked_status": [
+      "M native/src/seal/util/defines.h"
+    ]
+  }
+]

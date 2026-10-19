@@ -1,0 +1,173 @@
+#include "library_fixed.h"
+#include "globals.h"
+#include "sci_hook.h"
+#include "measurement.h"
+#include <fstream>
+#include <vector>
+#include <chrono>
+#include <algorithm>
+#include <stdexcept>
+#include <cstdlib>
+#include <sys/resource.h>
+#include <iomanip>
+using namespace std;
+int party=1,port=42400,num_threads=1;int32_t bitlength=32;
+string address="127.0.0.1";bool diagnostic=false;int step_index=-1;
+extern void reconstruct(int64_t*,int64_t*,int32_t,int32_t,int);
+void inspect(const char* op,const char* tensor,int64_t* values,int rows,int cols,int bits){
+ if(!diagnostic)return;
+ vector<int64_t> opened(rows*cols);reconstruct(values,opened.data(),rows,cols,bits);
+ if(party==2){
+  cout<<"TENSOR "<<step_index<<" "<<op<<" "<<tensor<<" "<<bits<<" "<<rows<<" "<<cols;
+  for(auto value:opened)cout<<" "<<value;cout<<"\n";
+ }
+}
+void read_exact(ifstream& input,int64_t* output,int size){
+ vector<int16_t> values(size);input.read(reinterpret_cast<char*>(values.data()),size*sizeof(int16_t));
+ if(input.gcount()!=size*sizeof(int16_t))throw runtime_error("private file has insufficient values");
+ for(int i=0;i<size;++i)output[i]=values[i];
+}
+int main(int argc,char**argv){
+ if(argc!=7 && argc!=8)throw runtime_error("party port party-owned-file start count diagnostic|secure [queries]");
+ party=stoi(argv[1]);port=stoi(argv[2]);int start=stoi(argv[4]),batch=stoi(argv[5]);diagnostic=string(argv[6])=="diagnostic";
+ int queries=argc==8?stoi(argv[7]):1;
+ if(queries<1||queries>2)throw runtime_error("queries must be one or two");
+ if((party!=1&&party!=2)||batch<1||batch>256||start<0)throw runtime_error("invalid execution contract");
+ cout<<setprecision(12);
+ const char* fixed_precompute_env=getenv("SEGFSS_SCI_PRECOMPUTE_FIXED");
+ const char* enabled_precompute_env=getenv("SEGFSS_SCI_ENABLE");
+ const bool scheduled_run=fixed_precompute_env&&atoi(fixed_precompute_env)==1&&enabled_precompute_env&&atoi(enabled_precompute_env)==1;
+ const auto begin=chrono::steady_clock::now();
+ google30_measure::begin(party);
+ ifstream input(argv[3],ios::binary);
+ vector<int64_t> X_storage(batch*3168,0),W1_storage(512),W2_storage(1600),U1_storage(3500),U2_storage(3500),Bg_storage(batch*100),Bh_storage(batch*100),FC_storage(3000),FCbias_storage(batch*30);
+ int64_t *W1=W1_storage.data(),*W2=W2_storage.data(),*U1=U1_storage.data(),*U2=U2_storage.data(),*Bg=Bg_storage.data(),*Bh=Bh_storage.data(),*FC=FC_storage.data(),*FCbias=FCbias_storage.data();
+ if(party==1){
+  read_exact(input,W1,512);read_exact(input,W2,1600);read_exact(input,U1,3500);read_exact(input,U2,3500);
+  read_exact(input,Bg,100);read_exact(input,Bh,100);read_exact(input,FC,3000);read_exact(input,FCbias,30);
+  for(int row=1;row<batch;++row){copy(Bg,Bg+100,Bg+row*100);copy(Bh,Bh+100,Bh+row*100);copy(FCbias,FCbias+30,FCbias+row*30);}
+ } else if(!scheduled_run){
+  input.seekg(int64_t(start)*3168*sizeof(int16_t));read_exact(input,X_storage.data(),batch*3168);
+ }
+ DECLARATIONS
+ int64_t tmp9bw16=16654,tmp10bw16=26006,tmp32=16384;
+ google30_measure::phase("initialization_base_ot");
+ initialize();
+ const auto initialized=chrono::steady_clock::now();
+ if(sci_segmented::activation_enabled()){
+  sci_segmented::ensure(party);
+ }
+ // Batch=128 phase mode: the MSB call shape is public and fixed for this
+ // generated Google-30 graph (297 calls, each over batch*100 values).  The
+ // FSS materials are generated after protocol setup but before the first
+ // input-dependent query, so their cost is a real offline phase rather than
+ // retrospective subtraction from a fused run.
+ const char* nseg_env=getenv("SEGFSS_SCI_NSEG");
+ const int nseg=nseg_env?atoi(nseg_env):4;
+ if(scheduled_run){
+  google30_measure::phase("fss_bridge_setup");
+  sci_segmented::ensure(party);
+ }
+ google30_measure::phase("query_preparation");
+ vector<int64_t> promoted(batch*30),indices(batch),predictions(batch);
+ for(int query=0;query<queries;++query){
+  if(scheduled_run){
+   // A new one-use material stream is generated before EVERY query.
+   // The client does not load x until after this phase and the ready barrier.
+   google30_measure::phase("fss_offline_precompute");
+   const auto before_prepare=sci_segmented::stats();
+   const auto prepare_start=chrono::steady_clock::now();
+   sci_segmented::precompute_schedule(batch*100,16,nseg,297);
+   const double seconds=chrono::duration<double>(chrono::steady_clock::now()-prepare_start).count();
+   google30_measure::phase("query_preparation");
+   const auto after_prepare=sci_segmented::stats();
+   cout<<"OFFLINE_QUERY index="<<query<<" wall_seconds="<<seconds
+       <<" sent_bytes="<<(after_prepare.offline_sent_bytes-before_prepare.offline_sent_bytes)
+       <<" received_bytes="<<(after_prepare.offline_received_bytes-before_prepare.offline_received_bytes)
+       <<" mask_conversion_ms="<<(after_prepare.mask_conversion_ms-before_prepare.mask_conversion_ms)
+       <<" keygen_ms="<<(after_prepare.keygen_ms-before_prepare.keygen_ms)
+       <<" scan_preprocessing_ms="<<(after_prepare.scan_preprocessing_ms-before_prepare.scan_preprocessing_ms)
+       <<"\n";
+  }
+  if(sci_segmented::activation_enabled()){
+   google30_measure::phase("fss_activation_offline_precompute");
+   sci_segmented::precompute_activations(batch,99,100,32);
+   google30_measure::phase("query_preparation");
+  }
+  google30_measure::phase("ready_barrier");
+  io->sync();
+  auto bridge_before_query=sci_segmented::stats();
+  google30_measure::query_begin();
+  if(party==2&&scheduled_run){
+   input.clear();input.seekg(int64_t(start)*3168*sizeof(int16_t));
+   read_exact(input,X_storage.data(),batch*3168);
+  }
+  // The recurrent state and every intermediate are reset per request.  Model
+  // and input ownership remain unchanged, while SCI/bridge material advances.
+  FILL_GENERATED
+  google30_measure::phase("online_compute");
+  for(int t=0;t<99;++t){
+   step_index=t;
+   for(int row=0;row<batch;++row)copy(X_storage.data()+row*3168+t*32,X_storage.data()+row*3168+(t+1)*32,tmp15bw16+row*32);
+   RECURRENT_CALLS
+  }
+  step_index=99;
+  CLASSIFIER_CALLS
+  xt->s_extend(batch*30,reinterpret_cast<uint64_t*>(tmp40bw8),reinterpret_cast<uint64_t*>(promoted.data()),8,16);
+  inspect("ArgMaxInputSignExtend_01","argmax_input",promoted.data(),batch,30,16);
+  for(int row=0;row<batch;++row)ArgMax(1,30,16,8,promoted.data()+row*30,indices.data()+row);
+  google30_measure::phase("output_reconstruction");
+  reconstruct(indices.data(),predictions.data(),batch,1,8);
+  io->sync();
+  google30_measure::query_end();
+  google30_measure::phase("query_reporting");
+  cout<<"QUERY_PHASE index="<<query<<" wall_seconds="<<google30_measure::queries.back().seconds<<"\n";
+  if(party==2)for(int row=0;row<batch;++row)cout<<"PRED "<<start+row<<" "<<predictions[row]<<"\n";
+  auto bridge_after_query=sci_segmented::stats();
+  cout<<"BRIDGE_QUERY index="<<query
+      <<" offline_ms="<<(bridge_after_query.offline_ms-bridge_before_query.offline_ms)
+      <<" online_ms="<<(bridge_after_query.online_ms-bridge_before_query.online_ms)
+      <<" calls="<<(bridge_after_query.calls-bridge_before_query.calls)
+      <<" elements="<<(bridge_after_query.elements-bridge_before_query.elements)
+      <<" segment_keys="<<(bridge_after_query.segment_keys-bridge_before_query.segment_keys)
+      <<" sent_bytes="<<(bridge_after_query.online_sent_bytes-bridge_before_query.online_sent_bytes)
+      <<" received_bytes="<<(bridge_after_query.online_received_bytes-bridge_before_query.online_received_bytes)
+      <<"\n";
+  cout<<"BRIDGE_DETAIL index="<<query
+      <<" online_sent_bytes="<<(bridge_after_query.online_sent_bytes-bridge_before_query.online_sent_bytes)
+      <<" online_received_bytes="<<(bridge_after_query.online_received_bytes-bridge_before_query.online_received_bytes)
+      <<" masked_input_open_ms="<<(bridge_after_query.masked_input_open_ms-bridge_before_query.masked_input_open_ms)
+      <<" evaluation_ms="<<(bridge_after_query.evaluation_ms-bridge_before_query.evaluation_ms)
+      <<" scan_ms="<<(bridge_after_query.scan_ms-bridge_before_query.scan_ms)
+      <<"\n";
+  // Legacy query-recorded replay is retained for older diagnostics. The
+  // physical Batch=128 experiment uses scheduled_run above and never enters
+  // this branch.
+  const char* replay=getenv("SEGFSS_SCI_PRECOMPUTE_REPLAY");
+  const char* enabled=getenv("SEGFSS_SCI_ENABLE");
+  if(query==0 && query+1<queries && !scheduled_run && replay && atoi(replay)==1 &&
+     enabled && atoi(enabled)==1){
+   auto before_prepare=sci_segmented::stats();
+   google30_measure::phase("fss_offline_precompute");
+   sci_segmented::precompute_recorded();
+   auto after_prepare=sci_segmented::stats();
+   cout<<"BRIDGE_PRECOMPUTE offline_ms="<<(after_prepare.offline_ms-before_prepare.offline_ms)
+       <<" sent_bytes="<<(after_prepare.offline_sent_bytes-before_prepare.offline_sent_bytes)
+       <<" received_bytes="<<(after_prepare.offline_received_bytes-before_prepare.offline_received_bytes)
+       <<" calls="<<sci_segmented::stats().calls
+       <<"\n";
+  }
+ }
+ google30_measure::phase("teardown");
+ const auto finished=chrono::steady_clock::now();
+ auto stats=sci_segmented::stats();struct rusage usage;getrusage(RUSAGE_SELF,&usage);
+ cout<<"EXECUTION setup_seconds="<<chrono::duration<double>(initialized-begin).count()<<" compute_and_output_seconds="<<chrono::duration<double>(finished-initialized).count()<<" total_seconds="<<chrono::duration<double>(finished-begin).count()<<" peak_rss_kib="<<usage.ru_maxrss<<"\n";
+ cout<<"BRIDGE calls="<<stats.calls<<" elements="<<stats.elements<<" segment_keys="<<stats.segment_keys<<" setup_ms="<<stats.setup_ms<<" offline_ms="<<stats.offline_ms<<" online_ms="<<stats.online_ms<<" sent_bytes="<<stats.sent_bytes<<" received_bytes="<<stats.received_bytes<<" activation_calls="<<stats.activation_calls<<" activation_elements="<<stats.activation_elements<<" activation_keys="<<stats.activation_keys<<" activation_offline_ms="<<stats.activation_offline_ms<<" activation_online_ms="<<stats.activation_online_ms<<"\n";
+ cout<<"BRIDGE_TOTAL_DETAIL setup_sent_bytes="<<stats.setup_sent_bytes<<" setup_received_bytes="<<stats.setup_received_bytes
+     <<" offline_sent_bytes="<<stats.offline_sent_bytes<<" offline_received_bytes="<<stats.offline_received_bytes
+     <<" online_sent_bytes="<<stats.online_sent_bytes<<" online_received_bytes="<<stats.online_received_bytes
+     <<" mask_conversion_ms="<<stats.mask_conversion_ms<<" keygen_ms="<<stats.keygen_ms<<" scan_preprocessing_ms="<<stats.scan_preprocessing_ms
+     <<" masked_input_open_ms="<<stats.masked_input_open_ms<<" evaluation_ms="<<stats.evaluation_ms<<" scan_ms="<<stats.scan_ms<<"\n";
+ sci_segmented::finish();finalize();
+ if(std::getenv("GOOGLE30_METRICS")) google30_measure::finish();
+}

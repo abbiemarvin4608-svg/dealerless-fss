@@ -1,0 +1,2324 @@
+% =====================================================================
+%  Segmented Dealerless Function Secret Sharing for
+%  Mixed-Width Private Inference
+%
+%  Style: IEEEtran (journal), mirroring the FSS-DT template.
+%  Build: pdflatex main && bibtex main && pdflatex main && pdflatex main
+%         (or: latexmk -pdf main.tex)
+%  Requires: IEEEtran.cls, amsmath, amssymb, algorithm, algpseudocode.
+% =====================================================================
+\documentclass[journal]{IEEEtran}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{amsthm}
+\usepackage{mathtools}
+\usepackage{algorithm}
+\usepackage{stmaryrd}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{algorithmicx}
+\usepackage{multirow}
+\usepackage{graphicx}
+% \graphicspath{{./}{paper/}} % resolve figures whether compiled from paper/ or the workspace root
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds}
+\usepackage{xcolor}
+\usepackage{pifont} % \ding{55} (cross mark) in the comparison table
+\usepackage[hidelinks]{hyperref}
+\usepackage{url}
+\usepackage{cite}
+
+% ---------- theorem environments ----------
+\newtheorem{definition}{Definition}
+\newtheorem{lemma}{Lemma}
+\newtheorem{theorem}{Theorem}
+\newtheorem{corollary}{Corollary}
+\newtheorem{proposition}{Proposition}
+\theoremstyle{definition}
+\newtheorem{example}{Example}
+\theoremstyle{plain}
+
+% ---------- notation macros ----------
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\F}{\mathbb{F}}
+\newcommand{\G}{\mathbb{G}}
+\newcommand{\R}{\mathcal{R}}                              % ring-generic carrier ring
+\newcommand{\ashare}[1]{\langle #1 \rangle}             % arithmetic share
+\newcommand{\bshare}[1]{\llbracket #1 \rrbracket}        % boolean share
+\newcommand{\rshare}[1]{\langle\!\langle #1 \rangle\!\rangle} % ring-generic share
+\newcommand{\Gen}{\mathsf{Gen}}
+\newcommand{\Eval}{\mathsf{Eval}}
+\newcommand{\DPF}{\mathsf{DPF}}
+\newcommand{\DCF}{\mathsf{DCF}}
+\newcommand{\Convert}{\mathsf{Convert}}
+\newcommand{\Fcot}{\mathcal{F}_{\mathsf{COT}}}
+\newcommand{\Frand}{\mathcal{F}_{\mathsf{Rand}}}
+\newcommand{\Fmul}{\mathcal{F}_{\mathsf{mul}}}
+\newcommand{\Ftr}{\mathcal{F}_{\mathsf{trunc}}}
+\newcommand{\hi}{\mathsf{hi}}
+\newcommand{\lo}{\mathsf{lo}}
+\newcommand{\msb}{\mathsf{msb}}
+\newcommand{\lsb}{\mathsf{lsb}}
+\newcommand{\DReLU}{\mathsf{DReLU}}
+\newcommand{\ReLU}{\mathsf{ReLU}}
+\newcommand{\BitBA}{\mathsf{BitBA}}
+\newcommand{\ind}[1]{\mathbf{1}\{#1\}}
+\newcommand{\xhat}{\hat{x}}
+\newcommand{\PREP}{\Pi_{\mathsf{PREP}}}
+\newcommand{\CCMP}{\Pi_{\mathsf{CCMP}}}
+\newcommand{\NextLevel}{\textsf{NextLevel}}
+\newcommand{\bigO}{\mathcal{O}}
+\newcommand{\seg}[1]{^{\scriptscriptstyle(#1)}}   % segment index superscript
+\newcommand{\nseg}{c}                              % number of segments
+\newcommand{\wseg}{w}                              % segment width
+\newcommand{\Trunc}{\Pi_{\mathsf{Trunc}}}
+\newcommand{\MulTr}{\Pi_{\mathsf{MulTrunc}}}
+\DeclareMathOperator{\negl}{negl}
+
+\begin{document}
+
+\title{Segmented Dealerless Function Secret Sharing\\ for Mixed-Width Private Inference}
+
+\author{Anonymous Submission% <-- replace with author block for camera-ready
+\thanks{Manuscript prepared from the architecture specification
+\texttt{FSS\_Inference\_Architecture.md}. This draft targets a top-tier
+security venue (NDSS/CCS/USENIX~Security/IEEE~S\&P) and is typeset in the
+IEEE journal style for reference convenience.}}
+
+\markboth{Preprint: Dealerless FSS Inference}%
+{Author \MakeLowercase{\textit{et al.}}: Segmented Dealerless FSS for Mixed-Width Private Inference}
+
+\maketitle
+
+% =====================================================================
+\begin{abstract}
+Large neural networks commonly rely on wide fixed-point arithmetic to preserve
+accuracy in private inference. Mixed precision reduces tensor and activation
+interface widths, while signed rescaling of wider intermediates can still incur
+high-bit-width nonlinear computation. Function Secret Sharing (FSS) supports
+local nonlinear evaluation on masked inputs, but widely used inference systems
+delegate key generation to a trusted third party. Existing full-tree distributed
+generators remove this assumption at an exponential cost in the function's
+input width, favoring short-domain nonlinear computation in practice. This
+leaves a gap between the wide nonlinear domains used by accuracy-preserving
+inference and the cost of generating their keys without a dealer.
+
+We study a parallel multi-segment decomposition for dealerless FSS. The parties
+split a public masked input into $\nseg$ digits, generate shallow segment trees,
+and combine comparison results with a logarithmic-depth secure scan. For a
+uniform split, tree generation from shared threshold bits requires
+$\bigO(\nseg\,2^{\ell/\nseg})$ hash calls instead of $\bigO(2^\ell)$;
+arithmetic-to-Boolean conversion and masked-input handling are accounted for
+separately. We describe how these primitives compose with fixed-point inference
+and distinguish tensor storage, accumulation, and nonlinear input widths.
+Two-party localhost measurements demonstrate 32-bit segmented comparison
+primitives. Cleartext ImageNette studies show the accuracy benefit of wider
+fixed-point formats, including a 24-bit backbone with 16-bit ReLU interfaces.
+A mixed-width FastGRNN execution retains 23- and 31-bit comparison domains in
+signed rescaling, showing that narrow interfaces do not eliminate wide-domain
+nonlinear work. The available evidence also includes a 30-sample SCI Google-30
+consistency replay; an end-to-end comparison of SCI with the segmented backend
+remains to be measured.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Function Secret Sharing, Distributed Comparison Function, Secure Inference,
+Dealerless Key Generation, Correlated Oblivious Transfer, Secure Two-Party
+Computation.
+\end{IEEEkeywords}
+
+% =====================================================================
+\section{Introduction}\label{sec:intro}
+\IEEEPARstart{S}{ecure} two-party computation (2PC) allows a model owner
+and a data owner to evaluate a neural network while protecting model parameters
+and inputs~\cite{secureml,cryptflow2}. Function Secret Sharing
+(FSS)~\cite{bgi15,bgi16} is a useful building block for this task: a function
+is split into two keys, and each party locally evaluates an output share on a
+public masked input. FSS-based systems such as LLAMA~\cite{llama},
+AriaNN~\cite{ariann}, Orca~\cite{orca}, and Sigma~\cite{sigma} exploit this
+property to reduce online interaction for nonlinear operations.
+
+Preserving accuracy in large neural networks commonly calls for wide fixed-point
+arithmetic to accommodate both the range and fractional resolution of
+intermediate values~\cite{cryptflow2,llama}. Mixed precision reduces widths where
+the numerical program permits. SiRNN~\cite{sirnn}, for example, uses 8/16-bit
+tensors and function interfaces alongside wider products and accumulations.
+These formats require secure extension and rescaling between widths. Signed
+rescaling can itself invoke high-bit-width comparisons, so narrowing tensor
+storage or an activation interface does not remove all wide-domain nonlinear
+computation.
+
+Many FSS-based systems use a trusted dealer to generate keys and correlated masks.
+This assumption matters when the two computing parties cannot delegate
+preprocessing to a non-colluding third party. Distributed FSS instead generates
+the keys jointly. Floram~\cite{floram} supports dealerless DPF generation with
+Boolean output; Half-Tree~\cite{halftree} uses correlated GGM trees and parallel
+COT; Distributed FSS~\cite{distfss} supports arithmetic-shared input and output.
+These constructions provide the ingredients for a two-party inference path
+without a trusted dealer, but their cost depends strongly on the domains of
+the nonlinear operations.
+
+For the full-tree distributed generators considered here, an $\ell$-bit domain
+requires $\Theta(2^\ell)$ tree expansion work and sequential correction-word
+exchanges across tree levels. At $\ell=32$, generating even the underlying
+Half-Tree DPF requires approximately $1.5\cdot2^{32}$ hash calls. The
+exponential generation cost makes these constructions more
+practical for short-domain nonlinear operations and becomes a bottleneck when
+inference repeatedly requires wide-domain comparisons, including those inside
+mixed-precision conversions.
+
+Our numerical and execution studies illustrate both sources of this demand.
+On ImageNette, uniform 16-bit storage causes substantial accuracy losses in the
+evaluated ResNets, while wider formats recover accuracy. Retaining a Q$(24,15)$
+backbone also allows 16-bit ReLU interfaces with near-FP32 Top-1 accuracy.
+Such interfaces still require conversion between numerical formats. In the
+evaluated mixed-width FastGRNN execution, signed rescaling invokes 23- and
+31-bit comparison domains despite the 8/16-bit tensor and activation interfaces
+(Section~\ref{sec:eval}). We therefore target the high-bit-width nonlinear
+operations that remain in accuracy-preserving fixed-point programs, including
+mixed-precision programs. Selecting tensor widths is a separate numerical
+optimization.
+
+We address the tree-generation cost with a \emph{parallel multi-segment
+decomposition}. An $\ell$-bit masked input is split into $\nseg$ public digits.
+Each digit is evaluated against a shared threshold using a shallow tree, and a
+balanced secure scan combines the results. For uniform segments, the exponential
+term becomes $\nseg\,2^{\ell/\nseg}$. The same radix structure factors point
+functions and comparisons. This mechanism applies at different function input
+widths; selecting the numerical width of each tensor is a separate optimization.
+Table~\ref{tab:related} places the construction among representative FSS systems.
+
+Our contributions are as follows.
+\begin{itemize}
+  \item \textbf{A segmented dealerless comparison construction.}
+  The radix identity in Lemma~\ref{lem:decomp} decomposes an $\ell$-bit
+  comparison into reduced-domain comparisons and an equality scan.
+  Theorem~\ref{thm:cost} characterizes tree generation from shared threshold
+  bits and the subsequent scan. Arithmetic threshold decomposition and private
+  query handling remain explicit parts of a complete comparison.
+
+  \item \textbf{Composition with fixed-point nonlinear gates.}
+  We combine Half-Tree correlated-GGM generation, distributed arithmetic
+  interfaces, and Grotto-style prefix-parity evaluation. The resulting
+  primitives support comparison, ReLU, reductions, and table-based activation
+  constructions. We specify their arithmetic and communication interfaces
+  separately from the numerical choices of a CNN or recurrent model.
+
+  \item \textbf{Evidence for wide-domain nonlinear computation.}
+  We report two-party localhost comparison measurements and cleartext
+  fixed-point accuracy studies, together with an execution trace identifying
+  wide comparison domains in mixed-precision rescaling. A historical Google-30
+  replay checks SCI against SeeDot on 30 samples. These establish the starting
+  point for a same-program comparison: the planned \emph{SCI + ours} backend retains
+  SCI's linear layers, conversions, truncation, and activation approximations
+  while replacing matching comparison/MSB primitives with segmented FSS.
+\end{itemize}
+
+\noindent\textbf{Organization.}
+Section~\ref{sec:related} reviews related work. Section~\ref{sec:prelim} fixes
+preliminaries. Section~\ref{sec:overview} gives the system overview and threat
+model. Section~\ref{sec:core}, the technical core, develops the efficient
+segmented dealerless FSS in two parts: the input decomposition
+(\S\ref{sec:split}) and the Grotto-on-HalfTree segment generation
+(\S\ref{sec:spine}). Section~\ref{sec:infer} composes these
+primitives into inference gate constructions. Section~\ref{sec:eval} describes the
+evaluation. Section~\ref{sec:conc} concludes.
+
+% =====================================================================
+\section{Related Work}\label{sec:related}
+
+\subsection{FSS-based Secure Inference}
+FSS reduces the online cost of comparison-type gates to a single round, which has
+made it the backbone of several secure-inference systems. LLAMA~\cite{llama}
+builds low-latency math (sigmoid, reciprocal) on DCF. AriaNN~\cite{ariann}
+provides an FSS toolkit for private deep learning. Orca~\cite{orca} accelerates
+FSS evaluation on GPUs. Pika~\cite{pika} evaluates arbitrary functions by
+full-domain DPF lookups, and Grotto~\cite{grotto} introduces a parity-segment
+tree that evaluates a DPF over an interval in $\bigO(\log N)$ rather than
+$\bigO(N)$, scaling spline evaluation to $64$-bit words. All of these assume a
+dealer (Grotto uses a non-colluding ``$+1$'' helper that supplies correlated
+randomness offline), and Pika-style full-domain lookups inherit the
+$\bigO(2^{n})$ cost that limits the practical domain. We borrow Grotto's
+evaluation as one of our two evaluation paths, but run it on dealerlessly
+generated keys over the shallow trees of our decomposition.
+
+\subsection{Dealerless and Distributed FSS Key Generation}
+Floram~\cite{floram} gives the first two-party DPF key generation but only for
+boolean output. Half-Tree~\cite{halftree} introduces the correlated-GGM tree,
+halving the cost of tree expansion in COT and DPF, and gives a distributed
+DPF/DCF generation protocol from COT together with a parallel-COT preprocessing
+subroutine, on both of which we build directly. Distributed FSS~\cite{distfss}
+provides two-party DPF and DCF generation with both arithmetic-shared input and
+output, resolves the arithmetic-comparison overflow problem, and characterizes the
+$\bigO(\ell)$-round generation cost we attack, while explicitly naming
+sublinear-round dealerless generation as open. Our decomposition is orthogonal to
+these generators: it reduces the depth of the trees they expand. Their full-tree
+expansion has exponential cost in the input width; Distributed FSS reports
+arithmetic-sharing evaluations at 8, 16, and 18 bits. This cost limits the
+practical use of repeated wide-domain nonlinear operations, including
+conversions within mixed-precision inference. The 32-bit
+primitive measurements in Section~\ref{sec:eval-split} evaluate this reduction.
+
+\subsection{Secure Comparison Protocols}
+Outside FSS, garbled circuits and the millionaires'-protocol line
+(CrypTFlow2~\cite{cryptflow2}, SIRNN~\cite{sirnn}) realize comparison through
+bit-decomposition and recursive digit comparison. Our radix decomposition
+(Lemma~\ref{lem:decomp}) is the FSS analogue of CrypTFlow2's recursive
+millionaire: it applies the same lexicographic identity, but to the
+\emph{public} blinded value, so each digit comparison becomes an independent
+reduced-domain FSS instance rather than a sequence of secure comparisons.
+
+% --- prior-work matrix ---
+\begin{table}[t]
+\centering
+\caption{Capabilities of representative FSS constructions.
+\checkmark: supported, \ding{55}: not supported. The 32-bit column denotes
+domain support, independently of key-generation cost or network precision.
+ML target denotes intended application rather than completed end-to-end
+evaluation. Our offline-OT property
+applies to the preprocessed comparison core; the SIGMA activation path also
+performs online preprocessing.}
+\label{tab:related}
+\renewcommand{\arraystretch}{1.2}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccccc}
+\toprule
+System & Dealerless & Arith.\ I/O & $32$-bit & All-OT-offline & ML target\\
+\midrule
+LLAMA~\cite{llama}      & \ding{55} & \checkmark & \checkmark & \ding{55} & \checkmark\\
+AriaNN~\cite{ariann}    & \ding{55} & \checkmark & \checkmark & \ding{55} & \checkmark\\
+Grotto~\cite{grotto}    & $+1$ helper & \checkmark & \checkmark & partial & \checkmark\\
+Pika~\cite{pika}        & \ding{55} & \checkmark & \ding{55} & \ding{55} & \checkmark\\
+Floram~\cite{floram}    & \checkmark & \ding{55} & \checkmark & \ding{55} & \ding{55}\\
+Half-Tree~\cite{halftree} & \checkmark & partial & \checkmark & \checkmark & \ding{55}\\
+Dist.\ FSS~\cite{distfss} & \checkmark & \checkmark & \checkmark & \ding{55} & \ding{55}\\
+\textbf{This work}      & \checkmark & \checkmark & \checkmark & partial & \checkmark\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =====================================================================
+\section{Preliminaries}\label{sec:prelim}
+
+\subsection{Notation}
+We describe arithmetic over $\Z_{2^{\ell}}$, embedding fixed-point reals
+as $\lfloor 2^{s}\cdot z\rfloor \bmod 2^{\ell}$ for fractional scale $s$, and use
+$\lambda=128$ as the computational security parameter. Table~\ref{tab:notation}
+summarizes the notation used throughout the paper. A uniform split sets the segment
+widths to $\wseg_j=\ell/\nseg$. Here $\ell$ denotes the domain of the
+particular protocol instance; 32 bits is one measured configuration. A
+mixed-width program separately specifies tensor storage and function I/O widths,
+fractional scales, product and accumulator widths, and actual comparison or LUT
+input widths. The implemented nonlinear operation determines the FSS domain.
+In particular, signed rescaling can require a wide comparison even when tensor
+storage and activation interfaces use fewer bits.
+
+Following the cost convention of Distributed FSS~\cite{distfss}, communication
+in analytical formulas is reported as the number of bits sent by one party;
+for symmetric traffic the bidirectional total is twice that value. Empirical
+measurements state their own counter boundary in Section~\ref{sec:eval}.
+For a protocol $\Pi$ we write
+$C^{\mathrm{off}}_{\Pi}$ and $R^{\mathrm{off}}_{\Pi}$ for the bits per party and
+the round depth it spends before the input is known, and
+$C^{\mathrm{on}}_{\Pi}$ and $R^{\mathrm{on}}_{\Pi}$ for the same two quantities
+once evaluation begins. Parallel calls contribute the sum of their
+communication but only the maximum of their round depths. Opening a $q$-bit
+sharing therefore costs $q$ bits in one round. With OT-extension-based
+triple generation~\cite{cryptflow2}, a Boolean \textsc{and} consumes one
+preprocessed bit triple and costs $2$ online bits in one round; generating
+its triple costs $\lambda+16$ offline bits. A conversion
+$\mathsf{B2A}:\F_2\rightarrow\Z_{2^q}$ costs $\lambda+q$ bits in one round.
+A $q$-bit Beaver triple costs $q(\lambda+16)$ offline bits to generate
+in one round; consuming it opens two $q$-bit
+differences, costing $2q$ bits in one round. Our $\BitBA$ preprocessing uses two such
+multiplications to correlate its Boolean and arithmetic masks. Their triples
+can be generated together, after which the two multiplications are dependent;
+the resulting preprocessing costs $2q(\lambda+18)$ bits in three offline
+rounds. Online, $\BitBA$ opens one masked ring element and one masked bit,
+costing $q+1$ bits in one round.
+
+\begin{table}[t]
+\centering
+\caption{Summary of notation.}
+\label{tab:notation}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{ll}
+\toprule
+Notation & Description \\
+\midrule
+$P_0,P_1$ & the two parties \\
+$b$ & party index, $b\in\{0,1\}$ \\
+$\ell$ & bit-width of a protocol instance \\
+$\lambda$ & computational security parameter, $\lambda=128$ \\
+$\Z_{2^{\ell}}$ & arithmetic ring \\
+$\F_2$ & binary field \\
+$\R$ & ring-generic carrier, $\F_2$ or $\Z_{2^{\ell}}$ \\
+$\ashare{x}$ & arithmetic share, $x=\ashare{x}_0+\ashare{x}_1$ \\
+$\bshare{x}$ & boolean share, $x=\bshare{x}_0\oplus\bshare{x}_1$ \\
+$\mathsf{B2A}$ & boolean-to-arithmetic conversion \\
+$\BitBA$ & boolean-bit--arithmetic-value multiplication \\
+$\nseg$ & segment count \\
+$\wseg_j$ & width of segment $j$, $\sum_j\wseg_j=\ell$ \\
+$C^{\mathrm{off}}_{\Pi},R^{\mathrm{off}}_{\Pi}$ & offline bits per party and rounds of $\Pi$ \\
+$C^{\mathrm{on}}_{\Pi},R^{\mathrm{on}}_{\Pi}$ & online bits per party and rounds of $\Pi$ \\
+$\xhat$ & masked input \\
+$r_{\mathrm{in}},r_{\mathrm{out}}$ & input and output masks \\
+$\Fcot$ & COT functionality \\
+$\Delta$ & global offset \\
+$K[r],M[r]$ & COT key and correlation, $M[r]=K[r]\oplus r\cdot\Delta$ \\
+$s$ & GGM node label \\
+$t$ & control  bit \\
+$\mathit{CW}_i$ & public correction word at level $i$ \\
+$\alpha$ & DPF special point \\
+$\beta$ & DPF payload \\
+$S$ & one-time hash key \\
+$H_S(x)$ & keyed hash $H(S\oplus x)$, outputs $\lambda$ bits \\
+$H'_S(x)$ & high $(\lambda{-}1)$-bit truncation of $H_S(x)$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Cryptographic Primitives}
+\textbf{Secret sharing}
+Our work involves $2$-out-of-$2$ secret sharing over different rings. We describe the sharing semantics as follows:
+
+\noindent\textbf{Arithmetic sharing $\ashare{x}$.} A secret value $x$ is additively shared between two parties such that $P_b$ holds $\ashare{x}_b$, satisfying $x=\ashare{x}_0+\ashare{x}_1 \bmod 2^{\ell}$.
+
+\noindent\textbf{boolean sharing $\bshare{x}$.} A secret value $x$ is XOR-shared such that $P_b$ holds $\bshare{x}_b$, satisfying $x=\bshare{x}_0\oplus\bshare{x}_1$.
+
+We write
+$\mathsf{B2A}$ for boolean-to-arithmetic conversion. We use $\BitBA$ for
+mixed-share multiplication: given a boolean sharing $\bshare{y}$ of a bit
+$y\in\{0,1\}$ and an arithmetic sharing $\ashare{x}$ over $\Z_{2^\ell}$, it
+returns an arithmetic sharing $\ashare{z}$ such that $z=x\cdot y$. Its
+preprocessing prepares correlated masks for both sharing domains; online, the
+parties open the masked $x$ and $y$ together in one round and derive
+$\ashare{z}$ locally. This functionality is called $\mathsf{BitXA}$ by
+Yang et al.~\cite{fssnn}; we write $\BitBA$ to make its boolean-bit and
+arithmetic-value interface explicit.
+
+\paragraph*{Ideal functionalities}
+The protocols in this paper are analyzed in the $(\Fcot,\Frand)$-hybrid
+model. $\Fcot$ is defined below. $\Frand$ is the standard coin-tossing
+functionality: on invocation it outputs a uniform string $W\in\{0,1\}^{\lambda}$ to
+both parties simultaneously, providing shared public randomness without either party
+controlling the outcome.
+
+\paragraph*{Arithmetic multiplication and truncation}
+Beyond the mixed-share product $\BitBA$, recurrent and normalization layers
+multiply two data-dependent arithmetic shares. We write $\Fmul$ for the
+standard multiplication functionality over $\Z_{2^{\ell}}$: on
+$\ashare{x},\ashare{y}$ it returns $\ashare{z}$ with $z=xy\bmod 2^{\ell}$,
+extended componentwise to vectors, and realized from a multiplication triple
+$(\ashare{a},\ashare{b},\ashare{ab})$ by the Beaver reduction: the parties
+open $x-a$ and $y-b$ in one round and combine locally. Triples are the only
+preprocessing $\Fmul$ needs, and they are generated dealerlessly from $\Fcot$
+by the standard COT-to-triple construction: each of the $\ell$ bit positions of
+each operand contributes one cross term, so one $\ell$-bit triple costs
+$2\ell$ COTs and no trusted party. This is the same $\Fcot$ that $\PREP$
+already batches, so $\Fmul$ adds no new setup assumption.
+
+A fixed-point product carries $2f$ fractional bits and must be rescaled by $f$
+before it is consumed downstream. We write $\Ftr$ for exact truncate-reduce:
+on $\ashare{z}$ it returns an $\ashare{z'}$ in
+$\mathbb Z_{2^{\ell-f}}$ such that
+$z'=\lfloor z/2^f\rfloor\bmod 2^{\ell-f}$. Interpreting the result as a signed
+two's-complement value gives the exact floor of the input's signed ring
+representative divided by $2^f$. Section~\ref{sec:trunc} gives the dealerless
+realization of SIGMA's low-bit DPF comparison for this functionality.
+
+\paragraph*{The offset gate and masked evaluation}
+\label{sec:offset}
+For a gate $g$ we use the offset (masked) gate family
+\begin{equation}
+\hat g_{[r_{\mathrm{in}},r_{\mathrm{out}}]}(x) \;=\; g\!\left(x - r_{\mathrm{in}}\right) + r_{\mathrm{out}},
+\label{eq:offset}
+\end{equation}
+where $r_{\mathrm{in}},r_{\mathrm{out}}$ are fresh random masks chosen at
+generation time. The parties hold $\ashare{r_{\mathrm{in}}}$, locally form
+$\ashare{\xhat}=\ashare{x}+\ashare{r_{\mathrm{in}}}$, and \emph{open} the masked
+value $\xhat=x+r_{\mathrm{in}}\bmod 2^{\ell}$. Since $r_{\mathrm{in}}$ is uniform
+and independent of $x$ and is never revealed, $\xhat$ is a one-time pad of $x$
+and leaks nothing. Evaluating the FSS key (whose secret point is shifted by
+$r_{\mathrm{in}}$ and whose output is shifted by $r_{\mathrm{out}}$) at the public
+$\xhat$ yields additive shares of $g(x)$.
+
+
+\textbf{Correlated OT and the Half-Tree}
+\label{sec:cot}
+A Correlated OT (COT) over $\F_{2^{\lambda}}$, modeled by $\Fcot$, gives a sender
+$(\Delta, K[r])$ and a receiver $(r, M[r])$ with the COT correlation
+\begin{equation}
+M[r] \;=\; K[r]\oplus r\cdot\Delta, \qquad r\in\F_2,\ \Delta\in\F_{2^{\lambda}}.
+\label{eq:cot}
+\end{equation}
+Following the COT-based multiplexer instantiation of~\cite{distfss}, a COT on an
+$\ell$-bit value costs $\lambda{+}\ell$ bits of communication (an $\ell$-bit MUX
+uses two such COTs at $2(\lambda{+}\ell)$ bits).
+The half-tree (correlated-GGM, cGGM)~\cite{halftree} introduces a global offset
+$\Delta$ and a single hash $H$, deriving the two children of a node $x$ as
+$x_{\mathrm{left}}:=H(x)$ and $x_{\mathrm{right}}:=x-H(x)$, so that one child is
+free and each level of the tree sums to $\Delta$, with
+$H(x)=\pi(\sigma(x))\oplus\sigma(x)$ for a fixed-key permutation $\pi$ and a
+linear orthomorphism $\sigma$. Because one child is free, a bare cGGM tree expands
+in $\approx N$ random permutation calls, half the $\approx 2N$ a standard GGM tree
+needs. The DPF tree we build keeps this one-call-per-node expansion on its first
+$n-1$ levels but doubles the last level, where two $H$ calls per parent break the
+leaf correlation so the leaves are pseudorandom. That last level adds $\approx N/2$
+calls over the bare count, for a total of $\approx 1.5N$. The control bit at each
+node coincides with the parity (control) bit that Grotto's evaluation reads, a
+structural alignment we exploit in \S\ref{sec:spine}.
+
+\subsection{Function Secret Sharing}\label{sec:fss}
+For a function family $\mathcal{F}$, a function $f \in \mathcal{F}$ is split into two additive shares $f_0$ and $f_1$, such that for any $x$ in the domain of $f$, $f_0(x) + f_1(x) = f(x)$. While for $b \in \{0,1\}$, any single share $f_b$ does not reveal any information about $f$. The formal definition of FSS is as follows.
+
+\paragraph{Definition 1} (Function Secret Sharing \cite{bgi15, bgi16}): Given the domain $\mathbb{G}_{in}$ and range $\mathbb{G}_{out}$, a (two-party) function secret sharing (FSS) scheme is a pair of probabilistic polynomial-time (PPT) algorithms (Gen, Eval) that satisfy:
+\begin{itemize}
+    \item $\text{Gen}(1^{\lambda},f)$: Given a security parameter $\lambda$ and a function $f \in \mathcal{F}$, the key generation algorithm generates two short keys $k_0, k_1$ that represent $f_0, f_1$, respectively, without revealing $f$.
+    \item $\text{Eval}(b, k_b, x)$: Given the party index $b \in \{0, 1\}$, key $k_b$, and input $x \in \mathbb{G}_{in}$, the evaluation algorithm returns the additive share $f_b(x)$ such that $f_0(x) + f_1(x) = f(x)$.
+\end{itemize}
+
+\paragraph{Distributed Point Function (DPF) \cite{bgi16}} For $\alpha \in \mathbb{G}_{in}$ and $\beta \in \mathbb{G}_{out}$, the point function $f_{\alpha,\beta}$ is defined as $f_{\alpha,\beta}(\alpha) = \beta$, and $f_{\alpha,\beta}(x) = 0$ when $x \neq \alpha$. The two-party FSS construction of DPF has the following properties.
+% detailed in Fig \ref{DPF1}
+
+\textbf{DPF invariance.} Generation and evaluation of the FSS key are based on the GGM tree, where the nodes of the tree consist of a random label $s$ and a control bit $t$. The invariant property of DPF is that only the nodes along the $\alpha$ path have different labels with a control bit of 1, while the nodes on all other paths have identical labels with a control bit of 0.
+
+\textbf{Correction words.} In the GGM tree, $s$ and $t$ are generated pseudo-randomly. To adhere to the DPF invariance, the dealer generates correction words for each layer along the $\alpha$ path to transform the random GGM-style tree. 
+
+\textbf{Supporting arithmetic output.} The output of the basic DPF scheme only supports boolean sharing. To support the arithmetic output of an element $\beta \in \mathbb{G}_{out}$, Boyle et al. propose a masked transformation as Equation \ref{eq:DPF-last}. When $P_b$ holds control bit $t_b$ and leaf value $r_b$ on the last layer $\alpha$ path, the dealer computes the final correction word as $(-1)^{t_1} \cdot (\beta - r_0 - r_1)$, using $r_b$ to conceal $\beta$. $P_b$ locally computes the output by applying $t_b$ to the correction word. When $t_0 \neq t_1$, the output is $\beta$, otherwise, the output is 0.
+\begin{equation}
+  \label{eq:DPF-last}
+  \begin{aligned} 
+    (t_0 - t_1) \cdot (-1)^{t_1} \cdot (\beta - r_0 + r_1) + r_0 -r_1
+  \end{aligned}
+\end{equation}
+
+\begin{figure}[h]
+    \centering
+   \includegraphics[width=\linewidth]{2PC.pdf} 
+  \caption{\textbf{The traversal from the root to leaf in GGM tree with DPF invariant property on target $\alpha = 5$.}}
+  \label{DPF1}
+\end{figure}
+
+
+% \subsection{Grotto's Parity-Segment Evaluation}
+% \label{sec:grotto}
+% Grotto~\cite{grotto} observes that a BGI shareholder can answer arbitrary segment
+% (interval) queries on a DPF by running a \emph{prefix-parity} walk directly on its
+% key share, at the cost of one half-PRG evaluation per traversed edge. Over a
+% domain of size $N$ this evaluates a comparison or interval-containment test in
+% $\bigO(\log N)$ rather than the $\bigO(N)$ of full-domain expansion, and the
+% vector of segment parities is exactly the one-hot selection vector picking which
+% piece of a piecewise function the secret input falls into. An inner product with
+% deferred sign correction then lifts the result to the ring. Because this online
+% phase is agnostic to how the key was produced, it composes with dealerless
+% generation.
+
+% =====================================================================
+\section{System Overview and Threat Model}\label{sec:overview}
+
+\subsection{Architecture}
+The preprocessed comparison core runs in two phases (Fig.~\ref{fig:overview}). In the \emph{offline
+phase}, $P_0$ and $P_1$ jointly run dealerless key generation: a single
+parallel-COT preprocessing call ($\PREP$) produces a shared global offset
+$\ashare{\Delta}$ and $\ell$ COT correlations on the secret threshold bits, from which the
+parties generate, for every comparison gate, a set of $\nseg$ \emph{correlated
+segment keys}, one shallow tree of depth $\wseg_j$ per segment, together with
+the input mask $\ashare{r_{\mathrm{in}}}$. All OT communication occurs here, and
+the transcript is independent of the actual inference inputs.
+
+In the \emph{online phase}, for each comparison gate the parties (i) locally
+blind and open $\xhat=x+r_{\mathrm{in}}$, (ii) locally split $\xhat$ into the
+$\nseg$ public digits $\xhat\seg{1},\dots,\xhat\seg{\nseg}$, (iii) evaluate the
+$\nseg$ segment keys \emph{in parallel}, and (iv) recombine the segment results
+with a logarithmic-depth secure-\textsc{and} scan. The segment evaluation
+uses boolean keys with a Grotto-style prefix-parity tree walk (\S\ref{sec:spine}).
+For inference with private weights, linear layers also require secure
+secret-by-secret multiplication and the prescribed rescaling. The planned
+SCI + ours composition retains SCI's mixed-width linear and conversion paths.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/fig_overview.pdf}
+\caption{Comparison architecture and intended gate composition, read left to
+right. Two parties, $P_0$, the
+\emph{user} holding private data $x$, and $P_1$, the \emph{model owner} holding a
+commercial model $M$, compute with \emph{no trusted dealer}. In the
+\textbf{offline} phase (all oblivious transfer, input-independent), a single
+parallel-COT preprocessing call decomposes each depth-$\ell$ comparison tree into
+$\nseg$ shallow segment trees, cutting dealerless generation from $\bigO(2^\ell)$
+to $\bigO(\nseg\cdot 2^{\ell/\nseg})$ and yielding correlated segment keys
+$\{k\seg{j}\}$. The keys hand off to the \textbf{online} phase (no OT): the parties
+open the blinded value $\xhat=x+r_{\mathrm{in}}$, split it into $\nseg$ public
+digits, evaluate the segment keys \emph{in parallel} via Grotto-style prefix-parity
+tree walks, and stitch the results with a
+logarithmic-depth secure-\textsc{and} scan to obtain the comparison share
+$\ashare{\mathbf{1}\{x<r_{\mathrm{in}}\}}$. The right-hand panel denotes
+inference applications of these gates; completed measurements are reported
+separately in Section~\ref{sec:eval}.}
+\label{fig:overview}
+\end{figure*}
+
+\subsection{Threat Model}
+We adopt the standard simulation paradigm against a \emph{static, semi-honest}
+PPT adversary that corrupts exactly one of $P_0,P_1$. The adversary follows the
+protocol but tries to infer the honest party's input from its view. Security is
+argued in the $(\Fcot,\Frand)$-hybrid model.
+
+\begin{definition}[Security]
+A protocol $\Pi$ securely realizes functionality $\mathcal G$ against a
+semi-honest adversary corrupting $P_b$ if there is a PPT simulator
+$\mathsf{Sim}_b$ such that
+$\{\mathsf{Sim}_b(x_b,\mathcal G_b),\,\mathcal G\}\approx_c
+\{\mathrm{view}^{\Pi}_b,\,\mathrm{out}^{\Pi}\}$,
+where $\mathrm{view}^{\Pi}_b$ is $P_b$'s view and $\approx_c$ denotes
+computational indistinguishability.
+\end{definition}
+
+Malicious security (input/key consistency, verifiable FSS) is out of scope and
+deferred to future work, consistent with the dealerless-FSS line we build
+on~\cite{distfss,halftree}.
+
+% =====================================================================
+\section{Segmented Dealerless FSS}\label{sec:core}
+We first introduce input decomposition for a specified function domain
+(\S\ref{sec:split}), then present dealerless segment key generation and
+evaluation (\S\ref{sec:spine}).
+
+
+\subsection{Parallel Decomposition}\label{sec:split}
+Existing distributed FSS protocols~\cite{distfss,halftree} rely on a single 
+depth-$\ell$ GGM tree, which incurs an infeasible $\Theta(2^{\ell})$ cost for 
+large domains (e.g., $\ell=32$). To bypass this exponential bottleneck, 
+we instead decompose the $\ell$-bit input into $\nseg$ aligned segments and 
+evaluate each using a separate shallow tree.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/fig_split.pdf}
+  \caption{\textbf{Decomposing the input into parallel segments.}
+  (a) Overview of our $\nseg$-segment decomposition, which transforms an
+  infeasible depth-$\ell$ tree into $\nseg$ parallel shallow trees.
+  (b) A concrete instantiation of the composite comparison logic using
+  $\xhat = 27|05|88|63$ and $r = 27|41|12|09$, demonstrating how the
+  first diverging segment ($05 < 41$) strictly dictates the global order.
+  Refer to this figure when reading Example~\ref{ex:split}, Definition~\ref{def:split},
+  and Lemma~\ref{lem:decomp}.}
+  \label{fig:split}
+\end{figure*}
+
+This decomposition is enabled by the offset gate from Eq.~\eqref{eq:offset}. 
+Because the parties jointly open a blinded value $\xhat$ without revealing the 
+underlying input $x$, we can directly partition this public $\xhat$ into $\nseg$ shorter segments.
+Instead of traversing a single deep tree to compare $\xhat$ against 
+a secret threshold $r$, we treat each segment as an independent 
+FSS instance with its own GGM seed. The single deep tree therefore gives way 
+to $\nseg$ shallow trees of depth $\wseg_j\approx\ell/\nseg$ (Fig.~\ref{fig:split}(a)).
+
+Since these $\nseg$ trees are mutually independent, they can be generated and
+evaluated in parallel. The computational cost is thus governed by the deepest sub-tree ($\max_j\wseg_j$) rather than the full depth ($\sum_j\wseg_j=\ell$). 
+Every sub-tree then operates over a smaller domain of size $2^{\wseg_j}$, which is feasible for dealerless FSS generation and evaluation.
+Building on this intuition, we formalize the segment-based encoding and its exact comparison logic below.
+
+\textbf{The $\nseg$-Segment Encoding.}
+Rather than treating $\xhat$ and $r$ as monolithic $\ell$-bit strings, we partition both into $\nseg$ aligned segments. A worked example shows why this suffices (Fig.~\ref{fig:split}b).\label{ex:split}
+For $\ell=32$ bits split into $\nseg=4$ byte-wide segments, take
+$\xhat = \mathtt{0x1B~05~58~3F}$ (decimal $27|5|88|63$) and
+$r = \mathtt{0x1B~29~0C~09}$ (decimal $27|41|12|9$).
+Scanning from the most significant byte, segment~1 matches ($27=27$), 
+but segment~2 diverges ($5<41$), which already fixes $\xhat<r$. 
+Segments~3 and~4 never need to be examined. 
+
+We now state the segment encoding precisely.
+
+\begin{definition}\label{def:split}
+Let $\wseg_1,\dots,\wseg_{\nseg}$ be segment widths such that 
+$\sum_{j=1}^{\nseg}\wseg_j=\ell$, indexed in decreasing order of significance. 
+Let $W_j:=\sum_{i>j}\wseg_i$ denote the bit-offset of the $j$-th segment. 
+For any $\xhat\in\Z_{2^{\ell}}$, its $j$-th segment $\xhat\seg{j}$ is defined as
+\begin{equation}
+\xhat\seg{j}:=\big\lfloor \xhat/2^{W_j}\big\rfloor \bmod 2^{\wseg_j},
+\end{equation}
+such that $\xhat=\sum_{j=1}^{\nseg}\xhat\seg{j}\cdot 2^{W_j}$.
+\end{definition}
+
+% The secret threshold $r \in \Z_{2^{\ell}}$ splits identically into segments $r\seg{j}$. Since $\xhat$ is public, the parties compute $\{\xhat\seg{j}\}_{j=1}^{\nseg}$ locally, but the secret segments $r\seg{j}$ stay embedded within the FSS keys, turning each segment into an independent FSS instance.
+\begin{algorithm}[t]
+\caption{Per-segment threshold decomposition ($\Pi_{\mathsf{Split}}$)}
+\label{alg:split}
+\textbf{Input:} $P_b$ holds the threshold share $\ashare{r}_b$ and the segment widths $(\wseg_1,\dots,\wseg_{\nseg})$. \\
+\textbf{Output:} $P_b$ holds, for each segment $j$, the threshold-bit share $\bshare{r\seg{j}}_b$.
+
+\vspace{0.3em}
+\textbf{[Offline]} $P_0$ and $P_1$ jointly, with no dealer:
+\begin{algorithmic}[1]
+\State $\bshare{r}_b \gets \textsf{BitDec}(\ashare{r}_b)$ \Comment{the \textsf{BitDec} protocol of~\cite{distfss}}
+\For{$j=1$ to $\nseg$}
+  \State $\bshare{r\seg{j}}_b \gets \bshare{r}_b[W_j,\,W_j{+}\wseg_j)$ with bit-offset $W_j=\sum_{i>j}\wseg_i$
+\EndFor
+\State \textbf{return} $\big\{\bshare{r\seg{j}}_b\big\}_{j\in[\nseg]}$
+\end{algorithmic}
+\end{algorithm}
+
+We realize this bit decomposition through the protocol $\Pi_{\mathsf{Split}}$
+in Algorithm~\ref{alg:split}. The parties first run $\textsf{BitDec}$ once on the
+$\ashare{r}_b$ to obtain boolean shares~\cite{distfss}, then slice out
+the bits $\bshare{r\seg{j}}$ of each segment locally (Lines 2--3). Every segment
+carries its own root seed into generation, so the $\nseg$
+shallow GGM trees, each of depth $\wseg_j$, are built and evaluated concurrently,
+which cuts the critical-path depth from $\ell$ down to $\max_j\wseg_j$. 
+
+\textbf{Complexity.} The $\textsf{BitDec}$ protocol recovers $\bshare{r}$ from
+$\ashare{r}$ via a two-party ripple-carry addition with carry recurrence
+$c_{i+1}=g_i\oplus(p_i\wedge c_i)$, where $g_i=\ashare{r}_0[i]\wedge\ashare{r}_1[i]$
+is the generate term and $p_i=\ashare{r}_0[i]\oplus\ashare{r}_1[i]$ is the propagate term.
+The reference protocol of~\cite{distfss} spends three \textsc{and}s per bit
+because it realizes $\mathcal{F}_{\mathsf{OR}}$ with a further \textsc{and}.
+We observe that $g_i$ and $p_i\wedge c_i$ are mutually exclusive
+($g_i=1$ forces $p_i=0$), so the disjunction reduces to the free \textsc{xor}
+shown above, leaving $2\ell-3$ \textsc{and}s total: $\ell-1$ generate terms
+plus $\ell-2$ carry gates.
+
+Because the threshold $r$ is input-independent, the entire bit decomposition
+executes offline. Segment slicing (Lines~2--3) is local and contributes no
+communication. The $2\ell{-}3$ required Beaver triples cost
+$(2\ell{-}3)(\lambda{+}16)$ bits to generate in one round. Consuming them
+unfolds in $\ell{-}1$ rounds: the generate-layer \textsc{and}s ($\ell{-}1$ gates)
+execute in parallel, followed by $\ell{-}2$ sequential carry \textsc{and}s, each
+opening two masked bits for $4$ bits of communication. Offline,
+$\Pi_{\mathsf{Split}}$ thus sends $(2\ell{-}3)(\lambda{+}20)$ bits per party across
+$\ell$ rounds. Online, segment slicing is purely local, so $\Pi_{\mathsf{Split}}$
+sends no bits and uses no rounds. The decomposition is omitted when the threshold
+is sampled directly in Boolean shares, as in $\Pi_{\DReLU}$.
+
+\textbf{Comparison decomposition.}
+We formalize the above comparison logic over secret-shared segments as follows.
+
+\begin{lemma}[Comparison decomposition]\label{lem:decomp}
+For $\xhat,r\in\Z_{2^{\ell}}$ decomposed into segments as in Definition~\ref{def:split}, with
+$L_j:=\ind{\xhat\seg{j}<r\seg{j}}$ and prefix-equality
+$E_j:=\bigwedge_{i<j}\ind{\xhat\seg{i}=r\seg{i}}$ ($E_1=1$),
+\begin{equation}
+\ind{\xhat<r}\;=\;\bigoplus_{j=1}^{\nseg}\big(E_j\wedge L_j\big).
+\label{eq:decomp}
+\end{equation}
+\end{lemma}
+\begin{IEEEproof}
+Let $j^\star$ be the index of the most-significant segment where $\xhat$ and $r$ differ. 
+If $\xhat=r$, all $L_j=0$ and both sides evaluate to $0$. For $j<j^\star$, the segments are identical, 
+yielding $L_j=0$. For $j>j^\star$, the prefix match is broken by segment $j^\star$, yielding $E_j=0$. At $j=j^\star$, 
+the prefix matches ($E_{j^\star}=1$) and the term equals $L_{j^\star}=\ind{\xhat<r}$,
+because the most-significant differing segment alone decides the order of the full values $\xhat$ and $r$.
+Consequently, at most one summand is nonzero, allowing the $\bigoplus$ to coincide with logical disjunction.
+\end{IEEEproof}
+
+Since Lemma~\ref{lem:decomp} guarantees mutually exclusive non-zero summands,
+the $\bigoplus$ reduces to a sum over the ring $\R$.
+Denoting $e_i:=\ind{\xhat\seg{i}=r\seg{i}}$ as the per-segment equality bit,
+we rewrite the comparison as an additive expansion gated by prefix products:
+\begin{equation}\label{eq:decomp-ss}
+\begin{aligned}
+\rshare{\ind{\xhat<r}}
+\;&=\;\sum_{j=1}^{\nseg}\Big(\rshare{L_j}\!\!\prod_{i=1}^{j-1}\rshare{e_i}\Big) \\
+\;&=\;\rshare{L_1}\;+\;\rshare{e_1}\rshare{L_2}\;+\;\cdots \\
+&\quad\;+\;\Big(\textstyle\prod_{i=1}^{\nseg-1}\rshare{e_i}\Big)\rshare{L_{\nseg}}.
+\end{aligned}
+\end{equation}
+
+The same segment structure factorizes the point function as well, since equality on $\xhat$ holds exactly when it holds on every segment:
+\begin{equation}
+\rshare{\ind{\xhat=\alpha}}\;=\;\prod_{j=1}^{\nseg}\rshare{\ind{\xhat\seg{j}=\alpha\seg{j}}}
+\;=\;\prod_{j=1}^{\nseg}\rshare{e_j}.
+\label{eq:dpf-decomp}
+\end{equation}
+
+Finally, we combine the pairs $(L_j,e_j)$ with the associative operator
+$(L,e)\otimes(L',e')=(L\oplus(e\wedge L'),e\wedge e')$. A balanced reduction
+uses exactly $2(\nseg-1)$ Boolean \textsc{and} gates in
+$\lceil\log_2\nseg\rceil$ dependent rounds. Under the convention above, its
+online communication is $4(\nseg-1)$ bits per party.
+
+
+\begin{theorem}[Generation and evaluation cost]\label{thm:cost}
+Let $d=\max_j\wseg_j$. Dealerless generation of the $\nseg$ segment keys from
+the Boolean shares of an $\ell$-bit threshold costs
+\begin{equation}
+\begin{aligned}
+R_{\mathrm{key}}&=d+2,\\
+C_{\mathrm{key}}(\ell,\boldsymbol{\wseg})
+&=\lambda+2\ell+1+
+\sum_{j=1}^{\nseg}\big((\wseg_j-1)(\lambda+1)+\lambda+2\big)
+\end{aligned}
+\label{eq:key-cost}
+\end{equation}
+offline rounds and bits per party, respectively, and performs
+$H_{\mathrm{key}}=\sum_j(3\cdot2^{\wseg_j-1}+3)$ hash calls per party. The
+$3\cdot2^{\wseg_j-1}$ term consists of one hash for every non-leaf node and
+two hashes for every leaf parent; the four leaf-mask hashes yield the constant
+$+3$ after accounting for the root offset. Preprocessing the
+$2(\nseg-1)$ bit triples required by the cross-segment reduction adds
+$4(\nseg-1)(\lambda+1)$ offline bits and can be batched with $\PREP$, so it
+does not increase $R_{\mathrm{key}}$. Once the query is public, evaluation
+costs $\lceil\log_2\nseg\rceil$ online rounds and $4(\nseg-1)$ bits per party;
+opening an $\ell$-bit masked query adds one round and $\ell$ bits.
+\end{theorem}
+\begin{IEEEproof}
+$\PREP$ takes two rounds and $\lambda+2\ell+1$ bits per party. For segment
+$j$, its $\wseg_j-1$ non-leaf correction words cost
+$(\wseg_j-1)(\lambda+1)$ bits and its leaf correction word costs
+$\lambda+2$ bits. Equal-depth layers of all segments are sent together, hence
+the $d+2$ round depth and the sum in~\eqref{eq:key-cost}. A depth-$\wseg_j$
+tree has $2^{\wseg_j-1}-1$ non-leaf nodes; its leaf stage makes two hash calls
+per leaf parent plus four mask hashes. The balanced operator above has
+$\nseg-1$ internal nodes and performs two \textsc{and}s at each node, which
+gives the stated triple count, communication, and round depth.
+\end{IEEEproof}
+
+For a uniform split $\wseg_j=\ell/\nseg$, Equation~\eqref{eq:key-cost}
+simplifies to
+$C_{\mathrm{key}}=(\ell+1)\lambda+3\ell+\nseg+1$ bits per party,
+$R_{\mathrm{key}}=\ell/\nseg+2$, and
+$H_{\mathrm{key}}=\nseg(3\cdot2^{\ell/\nseg-1}+3)$. Thus the computation remains
+$\bigO(\nseg2^{\ell/\nseg})$, while the complete masked comparison takes
+$\ell/\nseg+3+\lceil\log_2\nseg\rceil$ offline-plus-online rounds when the two
+phases are counted consecutively.
+This bound starts from shared threshold bits. Converting an arithmetic-shared
+threshold with Algorithm~\ref{alg:split} adds its own preprocessing cost.
+
+\textbf{Efficiency Gains and Parameter Selection.} The exponential reduction of 
+Theorem~\ref{thm:cost} has diminishing returns: the term $C(\nseg)=\nseg\,2^{\ell/\nseg}$ decays 
+rapidly in $\nseg$, while the linear overhead of maintaining $\nseg$ separate trees grows 
+monotonically. The optimum therefore settles at a small $\nseg$, trading round complexity 
+against bandwidth in a way that depends on the network. We treat $\nseg$ as a free parameter 
+and determine its optimal value experimentally in Section~\ref{sec:eval}.
+
+
+\subsection{Segment Key Generation and Evaluation}\label{sec:spine}
+GGM tree expansion constitutes the core mechanism for instantiating FSS primitives \cite{bgi15,bgi16}.
+As established in Section~\ref{sec:fss}, generating a DPF divides into two parts: the non-leaf
+layers ($1$ to $d{-}1$) expand the intermediate nodes and compute one correction word per layer
+to preserve the DPF invariant, while the leaf layer converts the final nodes into secret shares
+over the output range. We generate both parts for each shallow segment tree without a dealer.
+
+We follow the core insight of Grotto~\cite{grotto} that
+a single DPF suffices for comparison. The prefix parity at the
+evaluated index already yields the comparison bit $\ind{\xhat\seg{j}<r\seg{j}}$.
+Therefore, generating one point function per segment covers
+the nonlinear computation of PPML and avoids maintaining a
+separate comparison key alongside each equality key.
+To generate these DPFs without a dealer, we adapt existing
+primitives into a composite construction. We employ the correlated GGM (cGGM)
+expansion of Half-tree~\cite{halftree} to grow the shallow segment
+trees from a single parallelized offline COT invocation, which halves
+the per-node hashing cost and the communication overhead. The construction proceeds in
+three stages: (1) parallel-COT preprocessing ($\PREP$, Algorithm~\ref{alg:prep}),
+which resolves every dependency on the secret threshold; (2) cGGM expansion of layers
+$1$ to $d{-}1$; and (3) boolean leaf recovery at layer $d$. Stages (2) and (3) form the
+single generation procedure $\Pi_{\mathsf{Seg}}$ (Algorithm~\ref{alg:gen}). All stages are
+identical across the $\nseg$ segment trees.
+
+% \begin{figure*}[t]
+%   \centering
+%   \includegraphics[width=\textwidth]{figures/fig_compose.pdf}
+%   \caption{\textbf{Segment key generation architecture.}
+%   Dealerless offline preprocessing: parallel-COT ($\PREP$) followed by
+%   $\Pi_{\mathsf{Seg}}$ (Algorithm~\ref{alg:gen}), which expands layers $1 \dots d{-}1$
+%   via cGGM and recovers the boolean leaf at layer $d$ in 1 round. Online,
+%   Grotto-style prefix-parity tree walk yields the boolean comparison bit, which
+%   is retained for the multiplication-scan of Section~\ref{sec:split} over $\F_2$
+%   or combined with an arithmetic payload through $\BitBA$.}
+%   \label{fig:compose}
+% \end{figure*}
+
+
+\begin{algorithm}[t]
+\caption{Parallel-COT preprocessing ($\PREP$)}
+\label{alg:prep}
+\textbf{Input:} $P_b$ (for $b \in \{0,1\}$) holds the secret shares $\bshare{\alpha_i}_b$ for $i\in[1,\ell]$ and a global key $\Delta'_b\in\{0,1\}^{\lambda}$. \\
+\textbf{Output:} $P_b$ obtains a share $\bshare{\Delta}_b$ with
+$\lsb(\bshare{\Delta}_0\oplus\bshare{\Delta}_1)=1$ and COT correlations
+$\{(K[\bshare{\alpha_i}_{1-b}],\,M[\bshare{\alpha_i}_b])\}_{i\in[\ell]}$ such that 
+$M[\bshare{\alpha_i}_b]=K[\bshare{\alpha_i}_b]\oplus\bshare{\alpha_i}_b\cdot\bshare{\Delta}_{1-b}$.
+
+\vspace{0.3em}
+\textbf{[Offline]} $P_0$ and $P_1$ jointly, with no dealer:
+\begin{algorithmic}[1]
+\State The parties exchange $\lsb(\Delta'_b)$ and $P_b$ locally sets
+       $\bshare{\Delta}_b:=\Delta'_b\oplus(0^{\lambda-1}\,\|\,(\lsb(\Delta'_{1-b})\oplus b))$ 
+       so the two local keys yield one shared $\Delta$ with $\lsb(\Delta)=1$. 
+\State The parties invoke the $\Fcot$ functionality to generate $\ell$ correlations 
+in parallel. As a receiver, $P_b$ obtains choice bits $r^i_b$ and values $M'[r^i_b]$ 
+paired with keys $K'[r^i_b]$ held by the sender $P_{1-b}$, so that 
+$M'[r^i_b]=K'[r^i_b]\oplus r^i_b\cdot\Delta'_{1-b}$ for $i\in[1,\ell]$. 
+\State $P_b$ computes $g^i_b := \bshare{\alpha_i}_b \oplus r^i_b$ for $i\in[1,\ell]$ and sends $(g^1_b,\dots,g^{\ell}_b)$ to $P_{1-b}$.
+       \Comment{retarget the random COTs onto $\bshare{\alpha_i}$}
+\For{$i=1$ to $\ell$} \Comment{$P_b$ updates correlation locally}
+  \State $K[\bshare{\alpha_i}_{1-b}] := K'[r^i_{1-b}] \oplus (g^i_{1-b} \cdot \bshare{\Delta}_b)$.
+  \State $M[\bshare{\alpha_i}_b] := M'[r^i_b] \oplus \big(r^i_b \cdot (0^{\lambda-1} \| (\lsb(\Delta'_{1-b}) \oplus b))\big)$.
+\EndFor
+\State \textbf{return} $\big(\bshare{\Delta}_b,\,\{(K[\bshare{\alpha_i}_{1-b}],\,M[\bshare{\alpha_i}_b])\}_{i\in[1,\ell]}\big)$
+\end{algorithmic}
+\end{algorithm}
+
+Following Half-tree \cite{halftree}, our segment-key generation initializes with a parallel-COT preprocessing phase
+(Algorithm~\ref{alg:prep}). The parties combine their local keys $\Delta'_b$
+into a shared offset $\bshare{\Delta}$ with $\lsb(\Delta)=1$. They then draw $\ell$ random COT correlations via a
+single parallel $\Fcot$ invocation and retarget them to $\alpha_i$ using one round of difference bits $g^i_b$ (Lines 2--4).
+Consequently, all cryptographic dependencies on the secret $\alpha$ are resolved in exactly two rounds:
+one parallel COT invocation and one retargeting round that exchanges both $\lsb(\Delta'_b)$ and the difference vector, irrespective of the number of instantiated trees.
+
+Building on this preprocessing, $\Pi_{\mathsf{Seg}}$ (Algorithm~\ref{alg:gen})
+generates each segment tree in full. The non-leaf stage (Lines 1--5) expands layers
+$1$ to $d{-}1$: to guarantee mutually independent root shares across the $\nseg$ trees
+while safely reusing the shared offset, the protocol re-randomizes the root of segment
+$j$ by XORing $\bshare{\Delta}_b$ with a fresh public coin $W$ (Line 1). Each subsequent
+layer reveals the public correction word $\mathit{CW}_i$ by combining the hashes $H_S$
+and the $\PREP$ correlations (Line 3), securely blinding the $\alpha$ path. Because the
+cGGM derives both children of a node from a single hash invocation (the left
+child directly and the right as its complement), the per-level hash cost drops
+to one per node instead of two (Line 4).
+
+The leaf stage (Lines 6--9) recovers layer $d$. Lifting the leaves to
+arithmetic shares offline would increase dealerless preprocessing. We keep
+the leaves boolean and defer the arithmetic
+conversion to the online phase. $P_b$ folds the depth-$(d{-}1)$ nodes into the cross-hash
+arrays $XH_b[\sigma],XL_b[\sigma]$ (Line 6), samples a mask $\mu_b$ and reshares the
+correction-bit material (Line 7), then reconstructs the boolean leaf correction word
+$\mathit{CW}_d$ in one round of $\lambda{+}2$ bits (Lines 8--9). The resulting key drives
+a purely local tree walk online, whose control bit at the evaluated index is the boolean
+comparison share $\bshare{u}_b$; one $\BitBA$ call directly multiplies this bit
+by the arithmetic payload and returns the arithmetic share $\ashare{w}_b$.
+
+% \begin{algorithm}[t]
+% \caption{Per-segment key generation ($\Pi_{\mathsf{Seg}}$)}
+% \label{alg:gen}
+% \textbf{Input:} $P_b$ holds the segment-bit shares $\bshare{\alpha\seg{j}}_b$ (from $\Pi_{\mathsf{Split}}$), the offset share $\bshare{\Delta}_b$ and correlations $\{(K[\cdot],M[\cdot])\}$ (from $\PREP$), a one-time hash key $S$, and the signed payload $\ashare{\beta}_b$, with segment depth $d=\wseg_j$. \\
+% \textbf{Output:} $P_b$ holds the boolean key $k_b$, and online the arithmetic share $\ashare{w}_b$.
+
+% \vspace{0.3em}
+% \textbf{[Offline]} $P_0$ and $P_1$ jointly, with no dealer:
+% \begin{algorithmic}[1]
+% \State Sample a public coin $W \leftarrow \Frand$ and set the root $(s^{0,0}_b\|t^{0,0}_b):=\bshare{\Delta}_b\oplus W$.
+% \For{$i=1$ to $d-1$} \Comment{non-leaf layers}
+% \State $\bshare{\mathit{CW}_i}_b := \big(\bigoplus_{j \in [0,2^{i-1})} H_S(s^{i-1,j}_b\|t^{i-1,j}_b)\big) \oplus \overline{\bshare{\alpha_i}_b} \!\cdot\!\bshare{\Delta}_b\oplus K[\bshare{\alpha_i}_{1-b}]\oplus M[\bshare{\alpha_i}_b]$
+% and $P_b$ sends it to $P_{1-b}$ to reconstruct $\mathit{CW}_i$.
+% \State $(s^{i,2j+\sigma}_b\|t^{i,2j+\sigma}_b) :=
+% H_S(s^{i-1,j}_b\|t^{i-1,j}_b)\;\oplus\;\sigma\cdot(s^{i-1,j}_b\|t^{i-1,j}_b)\;\oplus\;t^{i-1,j}_b
+% \cdot\mathit{CW}_i$ for $j\in[0,2^{i-1}),\sigma\in\{0,1\}$
+% \EndFor
+% \State $(XH_b[\sigma]\|XL_b[\sigma]):=\bigoplus_{p \in [0,2^{d-1})} H_S\big((s^{d-1,p}_b\|t^{d-1,p}_b)\oplus\sigma\big)$ for $\sigma\in\{0,1\}$ \Comment{$XH_b$: high $\lambda-1$ bits, $XL_b$: last bit}
+% \State $P_b$ samples $\mu_b$, sets $d_b:=H'_S(\mu_b\oplus K[\bshare{\alpha_d}_{1-b}])\oplus H'_S(\mu_b\oplus K[\bshare{\alpha_d}_{1-b}]\oplus\bshare{\Delta}_b)\oplus XH_b[0]\oplus XH_b[1]$, and reshares $(\mu_b,d_b)$
+% \State $P_b$ forms the share
+% \Statex $\quad\begin{aligned}
+% \bshare{HCW}_b &:= XH_b[\overline{\bshare{\alpha_d}_b}]\oplus H'_S(\mu_b\oplus K[\bshare{\alpha_d}_{1-b}]) \\
+% &\quad \oplus\, H'_S(\mu_{1-b}\oplus M[\bshare{\alpha_d}_b])\oplus \bshare{\alpha_d}_b\cdot d_{1-b},
+% \end{aligned}$
+% \Statex $\quad \bshare{LCW[\sigma]}_b := XL_b[\sigma]\oplus\bshare{\alpha_d}_b\oplus b\{\sigma{=}0\}$ for $\sigma\in\{0,1\}$
+% \State Reconstruct $\mathit{CW}_d:=(HCW\|LCW[0]\|LCW[1])$ and \textbf{return} the boolean key $k_b=\big((s^{0,0}_b\|t^{0,0}_b),\{\mathit{CW}_i\}_{i\le d}\big)$
+% \end{algorithmic}
+
+% \vspace{0.3em}
+% \textbf{[Online]} On the opened $\hat{x}$, each $P_b$ recovers the arithmetic share:
+% \begin{algorithmic}[1]
+% \State Parse $k_b=\big((s^{0,0}_b\|t^{0,0}_b),\{\mathit{CW}_i\}_{i\le d}\big)$ and extract the segment digit $\xhat\seg{j}=(\xhat\seg{j}_1,\dots,\xhat\seg{j}_d)$.
+% \State $\bshare{L_j}_b\gets 0$ \Comment{initialize the comparison accumulator}
+% \For{$i=1$ to $d$} 
+% \State $(s^L_b\|t^L_b)\|(s^R_b\|t^R_b) := H_S(s^{i-1}_b) \oplus t^{i-1}_b\cdot\mathit{CW}_i$ 
+% \If{$\xhat\seg{j}_i = 0$}
+% \State $\bshare{L_j}_b \gets \bshare{L_j}_b \oplus t^R_b$; $(s^i_b\|t^i_b)\gets(s^L_b\|t^L_b)$ 
+% \Else
+% \State $(s^i_b\|t^i_b)\gets(s^R_b\|t^R_b)$ 
+% \EndIf
+% \EndFor
+% \State $\bshare{e_j}_b \gets t^d_b$ \Comment{leaf control bit is the equality share}
+% \State \textbf{return} $\ashare{w}_b\gets\BitBA(\bshare{L_j},\ashare{\beta})_b$.
+% \end{algorithmic}
+% \end{algorithm}
+
+\begin{algorithm}[t]
+\caption{Per-segment key generation and evaluation ($\Pi_{\mathsf{Seg}}$)}
+\label{alg:gen}
+\textbf{Input:} $P_b$ holds the segment-bit shares $\bshare{\alpha\seg{j}}_b$ (from $\Pi_{\mathsf{Split}}$), the offset share $\bshare{\Delta}_b$ and correlations $\{(K[\cdot],M[\cdot])\}$ (from $\PREP$), a one-time hash key $S$, and the signed payload $\ashare{\beta}_b$, with segment depth $d=\wseg_j$. \\
+\textbf{Output:} $P_b$ holds the boolean key $k_b$, and online the arithmetic share $\ashare{w}_b$.
+
+\vspace{0.3em}
+\textbf{[Offline]} $P_0$ and $P_1$ jointly, with no dealer:
+\begin{algorithmic}[1]
+\State Sample a public coin $W \leftarrow \Frand$ and set the root $(s^{0,0}_b\|t^{0,0}_b):=\bshare{\Delta}_b\oplus W$.
+\For{$i=1$ to $d-1$} 
+\State $\bshare{\mathit{CW}_i}_b := \big(\bigoplus_{j \in [0,2^{i-1})} H_S(s^{i-1,j}_b\|t^{i-1,j}_b)\big) \oplus \overline{\bshare{\alpha_i}_b} \!\cdot\!\bshare{\Delta}_b\oplus K[\bshare{\alpha_i}_{1-b}]\oplus M[\bshare{\alpha_i}_b]$
+and $P_b$ sends it to $P_{1-b}$ to reconstruct $\mathit{CW}_i$.
+\State $(s^{i,2j+\sigma}_b\|t^{i,2j+\sigma}_b) :=
+H_S(s^{i-1,j}_b\|t^{i-1,j}_b)\;\oplus\;\sigma\cdot(s^{i-1,j}_b\|t^{i-1,j}_b)\;\oplus\;t^{i-1,j}_b
+\cdot\mathit{CW}_i$ for $j\in[0,2^{i-1}),\sigma\in\{0,1\}$
+\EndFor
+\State $(XH_b[\sigma]\|XL_b[\sigma]):=\bigoplus_{p \in [0,2^{d-1})} H_S\big((s^{d-1,p}_b\|t^{d-1,p}_b)\oplus\sigma\big)$ for $\sigma\in\{0,1\}$ \Comment{$XH_b$: high $\lambda-1$ bits, $XL_b$: last bit}
+\State $P_b$ samples $\mu_b$, sets $d_b:=H'_S(\mu_b\oplus K[\bshare{\alpha_d}_{1-b}])\oplus H'_S(\mu_b\oplus K[\bshare{\alpha_d}_{1-b}]\oplus\bshare{\Delta}_b)\oplus XH_b[0]\oplus XH_b[1]$, and reshares $(\mu_b,d_b)$
+\State $P_b$ forms the share
+\Statex $\quad\begin{aligned}
+\bshare{HCW}_b &:= XH_b[\overline{\bshare{\alpha_d}_b}]\oplus H'_S(\mu_b\oplus K[\bshare{\alpha_d}_{1-b}]) \\
+&\quad \oplus\, H'_S(\mu_{1-b}\oplus M[\bshare{\alpha_d}_b])\oplus \bshare{\alpha_d}_b\cdot d_{1-b},
+\end{aligned}$
+\Statex $\quad \bshare{LCW[\sigma]}_b := XL_b[\sigma]\oplus\bshare{\alpha_d}_b\oplus b\{\sigma{=}0\}$ for $\sigma\in\{0,1\}$
+\State Reconstruct $\mathit{CW}_d:=(HCW\|LCW[0]\|LCW[1])$ and \textbf{return} the boolean key $k_b=\big((s^{0,0}_b\|t^{0,0}_b),\{\mathit{CW}_i\}_{i\le d}\big)$
+\end{algorithmic}
+
+\vspace{0.3em}
+\textbf{[Online]} On the opened $\hat{x}$, each $P_b$ recovers the arithmetic share:
+\begin{algorithmic}[1]
+\State Parse $k_b=\big((s^{0,0}_b\|t^{0,0}_b),\{\mathit{CW}_i\}_{i\le d}\big)$ and extract the segment digit $\xhat\seg{j}=(\xhat\seg{j}_1,\dots,\xhat\seg{j}_d)$.
+\State $\bshare{L_j}_b\gets 0$ \Comment{initialize the comparison accumulator}
+\For{$i=1$ to $d$} 
+\State $(s^L_b\|t^L_b)\|(s^R_b\|t^R_b) := H_S(s^{i-1}_b) \oplus t^{i-1}_b\cdot\mathit{CW}_i$ 
+\If{$\xhat\seg{j}_i = 0$}
+\State $\bshare{L_j}_b \gets \bshare{L_j}_b \oplus t^R_b$; $(s^i_b\|t^i_b)\gets(s^L_b\|t^L_b)$ 
+\Else
+\State $(s^i_b\|t^i_b)\gets(s^R_b\|t^R_b)$ 
+\EndIf
+\EndFor
+\State $\bshare{e_j}_b \gets t^d_b$ \Comment{leaf control bit is the equality share}
+\State \textbf{return} $\ashare{w}_b\gets\BitBA(\bshare{L_j},\ashare{\beta})_b$.
+\end{algorithmic}
+\end{algorithm}
+
+The online phase (Lines 1--11 of the \textbf{[Online]} block) implements the
+Grotto prefix-parity mechanism. Each party initializes a running accumulator
+$\bshare{L_j}_b$ to zero (Line 2), then walks the tree from root to the leaf
+indexed by $\xhat\seg{j}$. At each level $i$, the party expands both children
+from the current node with the correction word applied (Line 4), descends along
+the path specified by bit $\xhat\seg{j}_i$, and crucially, XORs the right child's
+control bit $t^R_b$ into $\bshare{L_j}_b$ whenever $\xhat\seg{j}_i=0$ (Lines 5--6).
+This accumulated XOR of off-path sibling tags yields the boolean share
+$\bshare{L_j}_b$ of the comparison $\ind{\xhat\seg{j}<r\seg{j}}$ after $d$ layers,
+while the leaf control bit $t^d_b$ separately captures the equality share
+$\bshare{e_j}_b$ (Line 10). The walk touches only $d$ nodes and requires no
+communication. A single $\BitBA$ call directly multiplies $\bshare{L_j}$ by
+the arithmetic payload $\ashare{\beta}$ and returns $\ashare{w}_b$ (Line 11),
+the only online round that consumes preprocessed correlations. The boolean
+comparison and equality outputs feed the multiplication-scan step
+(\S\ref{sec:split}) over $\F_2$. Appendix~\ref{app:full} states how the
+per-segment comparison and equality bits combine across the $\nseg$ segments.
+
+\textbf{Complexity.} For all $\nseg$ trees together, $\PREP$ costs $2$ offline
+rounds and $\lambda+2\ell+1$ bits per party. The non-leaf and leaf correction
+words add
+$\sum_j((\wseg_j-1)(\lambda+1)+\lambda+2)$ bits and
+$\max_j\wseg_j$ rounds because equal-depth words are batched across segments.
+Thus key generation has exactly the cost $R_{\mathrm{key}}$ and
+$C_{\mathrm{key}}$ in~\eqref{eq:key-cost}, together with
+$\sum_j(3\cdot2^{\wseg_j-1}+3)$ hash calls. Evaluation at one public digit per
+segment is local: it uses $\sum_j(\wseg_j+1)=\ell+\nseg$ on-path hashes and no
+communication.
+If an arithmetic payload of $p$ bits is requested for every segment, the
+$\nseg$ parallel $\BitBA$ calls add $4\nseg p(\lambda+p+1)$ offline bits in
+three preprocessing rounds and $\nseg(p+1)$ online bits in one round. The
+comparison protocol retains the Boolean $(L_j,e_j)$ outputs instead and pays
+only the cross-segment reduction stated in Theorem~\ref{thm:cost}.
+Thus the arithmetic-payload variant has the exact totals
+\begin{equation}
+\begin{aligned}
+C^{\mathrm{off}}_{\mathsf{Seg},p}
+ &=C_{\mathrm{key}}(\ell,\boldsymbol{\wseg})
+   +4\nseg p(\lambda+p+1),\\
+R^{\mathrm{off}}_{\mathsf{Seg},p}&=\max\{d+2,3\},\\
+C^{\mathrm{on}}_{\mathsf{Seg},p}&=\nseg(p+1),\qquad
+R^{\mathrm{on}}_{\mathsf{Seg},p}=1.
+\end{aligned}
+\label{eq:segment-payload-cost}
+\end{equation}
+
+% =====================================================================
+
+
+\section{Nonlinear Gates and Inference Composition}\label{sec:infer}
+Built upon the dealerless FSS key generation of Section~\ref{sec:core}, this
+section provides the secure protocols that a neural-network inference requires,
+including DReLU, the lookup table, ReLU, MaxPool, and ArgMax. The gate
+constructions and recurrent-cell cost formulas specify a composition; the
+measurements in Section~\ref{sec:eval} distinguish implemented primitives from
+complete secure network execution.
+% We start with DReLU (\S\ref{sec:Drelu}), the sign-extraction gate that underlies every signed comparison, and the lookup table (\S\ref{sec:lut}), which evaluates nonlinear activations exactly rather than through spline approximation. From these two primitives we derive ReLU, MaxPool, and ArgMax through standard reductions (\S\ref{sec:derived}). We then assemble the components into the inference protocol $\Pi_{\mathsf{Infer}}$ (\S\ref{sec:infer-proto}) and analyze its cost and security. 
+% Each protocol places all data-independent work in the offline phase and keeps a single opening as the only necessary online interaction per gate.
+
+\subsection{DReLU}\label{sec:Drelu}
+DReLU extracts the sign of a shared signed integer by computing its most significant
+bit (MSB). For a signed integer $x \in \Z_{2^\ell}$ with arithmetic sharing
+$x=\ashare{x}_0+\ashare{x}_1$, the protocol takes $\ashare{x}_b$ as input and
+outputs the boolean share
+$\bshare{\DReLU(x)}_b=\bshare{\ind{x<2^{\ell-1}}}_b
+=\bshare{1-\mathrm{MSB}(x)}_b$.
+
+Extracting the MSB from an arithmetic sum over $\Z_{2^\ell}$ requires a carry correction. 
+For share values $x_0,x_1$ with $x=(x_0+x_1)\bmod 2^\ell$, 
+standard approaches~\cite{cryptflow2,sigma,falcon} rely on the following identity:
+\begin{equation}
+  \label{eq:MSB}
+  \mathrm{MSB}(x)=\mathrm{MSB}(x_0)\oplus\mathrm{MSB}(x_1)
+  \oplus\ind{y_0+y_1\ge 2^{\ell-1}}.
+\end{equation}
+where $y_b:=x_b\bmod 2^{\ell-1}$.
+
+To avoid expensive online bit-decomposition, we apply this 
+carry logic to a masked input $\hat{x}=x+r\bmod 2^\ell$. 
+Let $r_H:=r_{\ell-1}$, $r_L:=r\bmod 2^{\ell-1}$, and 
+$\hat{y}:=\hat{x}\bmod 2^{\ell-1}$. Since $x=\hat{x}-r\bmod 2^\ell$, 
+subtracting the lower $\ell-1$ bits produces a borrow exactly 
+when $\hat{y}<r_L$, yielding:
+\begin{equation}
+\label{eq:MSB_last}
+\mathrm{MSB}(x)=\mathrm{MSB}(\hat{x})\oplus r_H\oplus\ind{\hat{y}<r_L}.
+\end{equation}
+We substitute this result into the 
+identity $\DReLU(x)=1-\mathrm{MSB}(x)$ to obtain our target evaluation function:
+\begin{equation}
+  \label{eq:drelu-fold}
+  \DReLU(x)=\underbrace{(r_H\oplus1)}_{\text{offline}}
+  \oplus \underbrace{\ind{\hat{y}<r_L}}_{\text{online: }\mathit{res}} 
+  \oplus \underbrace{\mathrm{MSB}(\hat{x})}_{\text{online: public}}.
+\end{equation}
+
+We present the detailed protocol $\Pi_{\DReLU}$ in Algorithm~\ref{alg:drelu}.
+During the offline phase, the parties prepare the mask $r$. Each party $P_b$ 
+samples independent random bits $\rho_{i,b} \in \{0,1\}$ to form boolean 
+shares $\bshare{r_i}_b:=\rho_{i,b}$, ensuring each 
+bit $r_i=\rho_{i,0}\oplus\rho_{i,1}$ is uniformly random. 
+The parties then perform $\ell$ batched $\mathsf{B2A}$ conversions 
+to locally compute the arithmetic mask $\ashare{r}$.
+% \begin{equation}
+%   \ashare{r}_b:=\sum_{i=0}^{\ell-1}2^i\ashare{r_i}_b\pmod{2^\ell}.
+%   \label{eq:drelu-mask}
+% \end{equation}
+Crucially, these boolean mask bits directly provide $\bshare{r_H}$ and 
+the segment shares of $r_L$ (Lines 1--2), enabling the parties 
+to set $\bshare{q}_b:=\bshare{r_H}_b\oplus[b{=}0]$ and 
+generate the segment keys for the threshold $r_L$ (Line 3--4).
+
+In the online phase, each $P_b$ masks its input to open $\hat{x}=x+r$ in one round and the
+segment keys are evaluated at $\hat{y}=\hat{x}\bmod 2^{\ell-1}$ to obtain
+$\bshare{\mathit{res}}$. Each party then computes 
+the boolean share $\bshare{w}_b$ locally.
+
+\begin{algorithm}[h]
+  \caption{Dealerless DReLU ($\Pi_{\DReLU}$)}
+  \label{alg:drelu}
+  \textbf{Input:} $P_b$ holds the additive share $\ashare{x}_b$ of $x \in \Z_{2^\ell}$. \\
+  \textbf{Output:} $P_b$ obtains the boolean share $\bshare{w}_b$ of $w = \DReLU(x)$.
+
+  \vspace{0.3em}
+  \textbf{Offline Phase:}
+  \begin{algorithmic}[1]
+    \State $P_b$ samples $\rho_{i,b}\stackrel{\$}{\leftarrow}\{0,1\}$ for $i=0,\ldots,\ell-1$ and sets $\bshare{r_i}_b:=\rho_{i,b}$.
+    \State The parties batch $\ashare{r_i}\gets\mathsf{B2A}(\bshare{r_i})$ and set $\ashare{r}_b:=\sum_{i=0}^{\ell-1}2^i\ashare{r_i}_b\bmod2^\ell$.
+    \State $P_b$ sets $\bshare{q}_b:=\bshare{r_{\ell-1}}_b\oplus[b{=}0]$ and takes $\bshare{r_L}_b$ as the lower $\ell-1$ mask bits.
+    \State $P_b$ generates the segment keys for threshold $r_L$ via the tree-branching protocols (Section~\ref{sec:core}).
+  \end{algorithmic}
+
+  \vspace{0.3em}
+  \textbf{Online Phase:}
+  \begin{algorithmic}[1]
+  \State $P_b$ computes $\ashare{\hat{x}}_b := \ashare{x}_b + \ashare{r}_b$ and opens $\hat{x}$ via $\mathcal{F}_{\mathrm{open}}$.
+  \State $P_b$ evaluates the segment keys at $\hat{x}\bmod 2^{\ell-1}$ to obtain $\bshare{\mathit{res}}_b=\bshare{\ind{\hat{y}<r_L}}_b$. \Comment{Grotto-style prefix-parity walk}
+  \State $P_b$ computes $u_b := \big( \bshare{q}_b + \bshare{\mathit{res}}_b + [b{=}0]\cdot\mathrm{MSB}(\hat{x}) \big) \bmod 2$. 
+  \State $P_b$ outputs $\bshare{w}_b := u_b$.
+  \end{algorithmic}
+\end{algorithm}
+
+\textbf{Complexity.} Let $m=\ell-1$, let $d=\max_j\wseg_j$ for the
+segmentation of $r_L$, and let $C_{\mathrm{key}}(m,\boldsymbol{\wseg})$ be
+defined by Equation~\eqref{eq:key-cost}. Preprocessing a Boolean DReLU key
+draws on three components that all start from the same shared mask bits and
+therefore run concurrently: the $\ell$ parallel
+$\mathsf{B2A}:\F_2\rightarrow\Z_{2^\ell}$ calls that assemble $r$ contribute
+$\ell(\lambda+\ell)$ bits in one round, segment-key generation for threshold
+$r_L$ contributes $C_{\mathrm{key}}(m,\boldsymbol{\wseg})$ bits in $d+2$
+rounds, and the $2(\nseg-1)$ bit triples consumed by the balanced
+cross-segment reduction contribute $4(\nseg-1)(\lambda+1)$ bits. The gate thus
+takes $d+2$ offline rounds with
+$\ell(\lambda+\ell)+C_{\mathrm{key}}(m,\boldsymbol{\wseg})+4(\nseg-1)(\lambda+1)$
+bits to communicate at the offline stage. Online, opening $\hat{x}$ costs
+$\ell$ bits in one round, the $\nseg$ Grotto walks and the closing XORs with
+$q$ and $\mathrm{MSB}(\hat{x})$ are local, and the balanced reduction
+communicates $4(\nseg-1)$ bits in $\lceil\log_2\nseg\rceil$ rounds, so
+evaluation needs $1+\lceil\log_2\nseg\rceil$ rounds with $\ell+4(\nseg-1)$
+bits of data exchange. We denote these four totals
+$C^{\mathrm{off}}_{\DReLU}$, $R^{\mathrm{off}}_{\DReLU}$,
+$C^{\mathrm{on}}_{\DReLU}$ and $R^{\mathrm{on}}_{\DReLU}$, and reuse them for
+the derived gates of \S\ref{sec:derived}. For
+$(\ell,\lambda,\nseg)=(32,128,2)$ with widths $(16,15)$, this is $18$ offline
+rounds and $9{,}828$ offline bits per party, followed by $2$ online rounds and
+$36$ online bits per party. Key generation performs $147{,}462$ local hashes
+per party, and the two online segment walks perform $33$ local hashes.
+
+
+\subsection{Lookup Table}\label{sec:lut}
+Evaluating nonlinear functions remains a primary performance bottleneck in
+secure inference. While spline approximations require 
+$\mathcal{O}(k)$ expensive secure comparisons 
+and introduce approximation errors~\cite{pika}, 
+LUT evaluation is exact for the supplied table; when the table stores a
+discretized activation, its function-approximation error must be reported
+separately.
+Algorithm~\ref{alg:LUT} presents our dealerless LUT
+protocol for a $q$-bit index $x\in\Z_{2^q}$ and a public table
+$\vec T\in(\Z_{2^p})^{2^q}$.
+
+In the offline phase, $P_0$ and $P_1$ generate 
+a random mask $\ashare{r}$ and a shared one-hot 
+vector $\vec{v}$ such that $\vec{v}[r]=1$. To avoid the 
+prohibitive cost of full-domain expansion, 
+the parties efficiently construct $\vec{v}$ via 
+the tensor product of $\nseg$ short per-segment DPFs, 
+as defined in \eqref{eq:dpf-decomp}. During the online phase, 
+the parties reconstruct the masked input $\hat{x} = x - r$. Each $P_b$ 
+then locally applies a cyclic shift to $\vec{v}$ by $\hat{x}$ positions, 
+yielding an aligned vector $\vec{u}$ such that $\vec{u}[x]=1$. 
+Finally, the output share $\ashare{\vec{T}[x]}_b$ is obtained via a 
+local inner product between $\vec{u}$ and $\vec{T}$.
+
+\begin{algorithm}[h]
+  \caption{Dealerless lookup table ($\Pi_{\mathsf{LUT}}$)}
+  \label{alg:LUT}
+  \textbf{Input:} $P_b$ holds $\ashare{x}_b$ for $x\in\Z_{2^q}$ and a public table $\vec{T}\in(\Z_{2^p})^{2^q}$. \\
+  \textbf{Output:} $P_b$ holds $\ashare{w}_b$ over $\Z_{2^p}$, where $w = \vec{T}[x]$.
+
+  \vspace{0.3em}
+  \textbf{[Offline]} $P_0$ and $P_1$ jointly, with no dealer:
+  \begin{algorithmic}[1]
+    \State $P_b$ samples Boolean mask-bit shares $\bshare{r_i}_b$ for
+    $i=0,\ldots,q-1$, batches
+    $\ashare{r_i}\gets\mathsf{B2A}(\bshare{r_i})$, and sets
+    $\ashare r_b:=\sum_i2^i\ashare{r_i}_b\bmod 2^q$.
+    \State Run the dealerless DPF generation of Section \S\ref{sec:core} for a 
+    payload of $1$ at the secret index $r$, obtaining the $\nseg$ per-segment DPF key shares $k_b$.
+    \State Upon receiving $k_b$, the parties perform a batched
+    evaluation across the segment-domain to obtain the shared 
+    vector $\ashare{\vec{v}}$, where 
+    $\vec{v}[i] \leftarrow \Pi_{\mathrm{Eval}}(k_b, i)$ 
+    for $i \in \{0, \dots, 2^q-1\}$.
+  \end{algorithmic}
+
+  \vspace{0.3em}
+  \textbf{[Online]} on input $\ashare{x}$, each $P_b$:
+  \begin{algorithmic}[1]
+    \State $\ashare{\hat{x}}_b \gets \ashare{x}_b - \ashare{r}_b$, then open $\hat{x}$ via $\mathcal{F}_{\mathrm{open}}$. \Comment{1 round}
+    \State $\ashare{\vec u}_b \gets \ashare{\vec v}_b \ggg \hat{x}$ \quad and \quad $\ashare{w}_b \gets \sum_{i=0}^{2^q-1} \vec{T}[i]\cdot\ashare{\vec u[i]}_b$. \Comment{local shift and inner product}
+    \State \textbf{return} $\ashare{w}_b$
+  \end{algorithmic}
+\end{algorithm}
+
+\textbf{Complexity.} Let the LUT index have $q$ bits, the table entries and
+output have $p$ bits, and let
+$d=\max_j\wseg_j$. Generating its segment keys costs
+$R_{\mathrm{key}}=d+2$ offline rounds,
+$C_{\mathrm{key}}(q,\boldsymbol{\wseg})$ bits per party, and
+$\sum_j(3\cdot2^{\wseg_j-1}+3)$ hashes. Expanding the full segment vectors
+uses $\sum_j(3\cdot2^{\wseg_j-1}-1)$ further local hashes. Fix a balanced binary tensor tree
+$\mathcal T$ over the segments. For an internal node $v$, let
+$W_v=\sum_{j\in\operatorname{leaves}(v)}\wseg_j$ and define
+$A_{\mathcal T}=\sum_{v\in\operatorname{int}(\mathcal T)}2^{W_v}$.
+Materializing the Boolean one-hot vector requires exactly $A_{\mathcal T}$
+secure \textsc{and} gates. It therefore costs
+$2A_{\mathcal T}(\lambda+2)$ offline bits, including triple generation and
+consumption, in $\lceil\log_2\nseg\rceil$ dependent rounds after key
+generation. As the result is used in an arithmetic inner product, converting
+its $2^q$ entries adds $2^q(\lambda+p)$ bits and one round. The $q$ mask bits
+also require $q(\lambda+q)$ bits, batched with key generation. Hence
+\begin{equation}
+\begin{aligned}
+C^{\mathrm{off}}_{\mathsf{LUT}}(q,p)
+ &=q(\lambda+q)+C_{\mathrm{key}}(q,\boldsymbol{\wseg})\\
+ &\quad+2A_{\mathcal T}(\lambda+2)+2^q(\lambda+p),\\
+R^{\mathrm{off}}_{\mathsf{LUT}}(q,p)&=d+3+\lceil\log_2\nseg\rceil,
+\end{aligned}
+\label{eq:lut-offline-cost}
+\end{equation}
+where all independent preprocessing calls are batched. Online, opening the
+masked index costs $q$ bits in one round; the rotation and public-table inner
+product are local:
+\begin{equation}
+C^{\mathrm{on}}_{\mathsf{LUT}}(q,p)=q,\qquad
+R^{\mathrm{on}}_{\mathsf{LUT}}(q,p)=1.
+\label{eq:lut-online-cost}
+\end{equation}
+This accounting makes the scope explicit: segmentation reduces dealerless key
+generation, but materializing a full $2^q$ one-hot vector remains exponential
+in the reduced LUT index width $q$.
+
+\subsection{Dealerless Truncation}\label{sec:trunc}
+Every fixed-point product leaves $2f$ fractional bits, so $\Fmul$ is followed
+by a rescaling by $f$ bits. We use SIGMA's exact truncate-reduce
+protocol~\cite{sigma}. In preprocessing, the parties sample a uniform mask
+$r=2^f h+l$ in $\mathbb Z_{2^\ell}$, where $0\le l<2^f$. They hold arithmetic
+shares of $h$ and $r$, and Boolean shares of the bits of $l$. A batch of
+$f$ Boolean-to-arithmetic conversions constructs the arithmetic shares of $r$.
+The parties generate a one-bit correlated-DPF comparison key for the secret
+threshold $l$. They also prepare Boolean and arithmetic shares of an independent
+random bit $c$.
+
+Online, the parties open $\hat z=z+r\bmod 2^\ell$. The DPF comparison returns
+Boolean shares $w_b$ of $w=\ind{(\hat z\bmod 2^f)<l}$. They open only the
+masked bit $\bar w=\bigoplus_b(w_b\oplus c_b)$ and use the arithmetic shares
+$C_b$ of $c$ to recover an arithmetic share of $w$:
+\begin{equation}
+\begin{aligned}
+u_b&=b\bar w+C_b-2\bar w C_b,\\
+\ashare{z'}_b
+ &=b\left\lfloor\hat z/2^f\right\rfloor-h_b-u_b
+   \pmod {2^{\ell-f}}.
+\end{aligned}
+\label{eq:trunc}
+\end{equation}
+Here $b\in\{0,1\}$ indexes the parties and $h_b$ is their share of $h$.
+The low-bit comparison removes the borrow caused by subtracting $r$ from
+$\hat z$. Thus $z'=\lfloor z/2^f\rfloor\bmod 2^{\ell-f}$ for every input,
+including negative two's-complement values. We also use this truncation to
+form the bounded SIGMA LUT index.
+
+\textbf{Complexity.} Let $C^{\mathrm{off}}_{\mathsf{B2A}}(f+1,\ell)$ denote
+the cost of converting the $f$ low mask bits and $c$ in the $\ell$-bit ring.
+Let $C^{\mathrm{off}}_{\mathsf{DPF}}(f,1)$ denote dealerless generation of
+the one-bit DPF comparison key. The analogous $R$ terms count offline rounds.
+Our implementation runs these steps in sequence. Per party, the logical
+communication costs are
+\begin{equation}
+\begin{aligned}
+C^{\mathrm{off}}_{\mathsf{Trunc}}(f)
+ &=C^{\mathrm{off}}_{\mathsf{B2A}}(f+1,\ell)
+   +C^{\mathrm{off}}_{\mathsf{DPF}}(f,1),\\
+R^{\mathrm{off}}_{\mathsf{Trunc}}(f)
+ &=R^{\mathrm{off}}_{\mathsf{B2A}}(f+1,\ell)
+   +R^{\mathrm{off}}_{\mathsf{DPF}}(f,1),\\
+C^{\mathrm{on}}_{\mathsf{Trunc}}(f)&=\ell+1,\qquad
+R^{\mathrm{on}}_{\mathsf{Trunc}}(f)=2.
+\end{aligned}
+\label{eq:trunc-cost}
+\end{equation}
+SIGMA counts one round and two bits in total for the comparison when $\hat z$
+is already public. Our arithmetic-share interface first opens $\hat z$ and
+then opens the masked comparison bit. In measured communication, the latter
+occupies one byte per party; the ring opening uses one, two, four, or eight
+bytes for $\ell\leq8,16,32,64$, respectively.
+
+We use $\MulTr(f)=\Trunc(f)\circ\Fmul$ below for a fixed-point
+multiplication followed by exact $f$-bit rescaling. Combining the Beaver cost
+from \S\ref{sec:prelim} with~\eqref{eq:trunc-cost} gives the following costs.
+Here $R^{\mathrm{off}}_{\mathsf{Mul}}(\ell)$ counts the rounds used to generate
+one dealerless Beaver triple:
+\begin{equation}
+\begin{aligned}
+C^{\mathrm{off}}_{\mathsf{MT}}(f)
+ &=2\ell(\lambda+\ell)+C^{\mathrm{off}}_{\mathsf{Trunc}}(f),\\
+R^{\mathrm{off}}_{\mathsf{MT}}(f)
+ &=R^{\mathrm{off}}_{\mathsf{Mul}}(\ell)
+   +R^{\mathrm{off}}_{\mathsf{Trunc}}(f),\\
+C^{\mathrm{on}}_{\mathsf{MT}}(f)
+ &=3\ell+1,\\
+R^{\mathrm{on}}_{\mathsf{MT}}(f)
+ &=3.
+\end{aligned}
+\label{eq:multr-cost}
+\end{equation}
+The Beaver opening precedes the input-mask opening and DPF comparison.
+
+\subsection{Derived Nonlinear Gates}\label{sec:derived}
+Based on $\Pi_{\text{DReLU}}$, we first construct Max and ReLU functions.
+We then build inversion, reciprocal square root, GELU, Sigmoid, Tanh, Softmax,
+and LayerNorm from $\Pi_{\text{LUT}}$ with $\Pi_{\text{DReLU}}$.
+These protocols complete the nonlinear operations used by neural-network inference~\cite{cryptflow2,sigma,falcon}
+and are detailed in Appendix \ref{appendix:Secure 3PC Protocols}. 
+
+\paragraph*{ReLU}
+Given a shared value $x$ and a target value $res$, we first extend $\Pi_{\text{DReLU}}$ to 
+a secure selection protocol defined as $\text{Select}(x, res) = 1\{x \geq 0\} \cdot res$ ($\Pi_{\text{Select}}$). 
+The boolean
+DReLU result serves as a direct input to the mixed-share multiplication.
+Consequently, the ReLU function can be defined as $\text{ReLU}(x) = \text{Select}(x, x)$.
+Writing $C^{\mathrm{off}}_{\DReLU}$ and $C^{\mathrm{on}}_{\DReLU}$ for the two
+DReLU totals of \S\ref{sec:Drelu}, one $\ell$-bit ReLU costs
+\begin{equation}
+\begin{aligned}
+C^{\mathrm{off}}_{\ReLU}&=C^{\mathrm{off}}_{\DReLU}
+ +4\ell(\lambda+\ell+1),\\
+R^{\mathrm{off}}_{\ReLU}&=\max\{R^{\mathrm{off}}_{\DReLU},3\},\\
+C^{\mathrm{on}}_{\ReLU}&=C^{\mathrm{on}}_{\DReLU}+\ell+1,
+\\R^{\mathrm{on}}_{\ReLU}&=2+\lceil\log_2\nseg\rceil.
+\end{aligned}
+\label{eq:select-cost}
+\end{equation}
+The added terms are exactly one $\BitBA$ preprocessing and one masked
+ring-and-bit opening. An $\ell$-bit $\Pi_{\mathsf{Select}}$ has the same four
+costs as~\eqref{eq:select-cost}; replacing the selected value $x$ by another
+$\ell$-bit arithmetic share does not change the protocol.
+
+\paragraph*{MaxPool and ArgMax}
+To evaluate $k$ shared values, we structure
+pairwise comparisons as a balanced binary tree.
+For candidates $(a, i_a)$ and $(b, i_b)$, we define
+$\text{Max}(a, b) = \text{Select}(a - b, a - b) + b,
+\text{ArgMax}(i_a, i_b) = \text{Select}(a - b, i_a - i_b) + i_b$.
+For MaxPool, every internal node has the ReLU cost above. A binary tree over
+$k$ inputs has $k-1$ internal nodes, and calls at one level are batched. Thus
+\begin{equation}
+\begin{aligned}
+C^{\mathrm{off}}_{\mathsf{MaxPool}}(k)&=(k-1)C^{\mathrm{off}}_{\ReLU},\\
+R^{\mathrm{off}}_{\mathsf{MaxPool}}(k)&=R^{\mathrm{off}}_{\ReLU},\\
+C^{\mathrm{on}}_{\mathsf{MaxPool}}(k)&=(k-1)C^{\mathrm{on}}_{\ReLU},\\
+R^{\mathrm{on}}_{\mathsf{MaxPool}}(k)
+ &=\lceil\log_2 k\rceil R^{\mathrm{on}}_{\ReLU}.
+\end{aligned}
+\label{eq:maxpool-cost}
+\end{equation}
+ArgMax reuses each comparison but selects both the value and its index. For a
+$p$-bit index, the second selection at every internal node adds one $\BitBA$.
+The value and index selections run in parallel, so
+\begin{equation}
+\begin{aligned}
+C^{\mathrm{off}}_{\mathsf{ArgMax}}(k,p)
+ &=(k-1)\bigl(C^{\mathrm{off}}_{\ReLU}
+       +4p(\lambda+p+1)\bigr),\\
+R^{\mathrm{off}}_{\mathsf{ArgMax}}(k,p)
+ &=\max\{R^{\mathrm{off}}_{\ReLU},3\},\\
+C^{\mathrm{on}}_{\mathsf{ArgMax}}(k,p)
+ &=(k-1)\bigl(C^{\mathrm{on}}_{\ReLU}+p+1\bigr),\\
+R^{\mathrm{on}}_{\mathsf{ArgMax}}(k,p)
+ &=\lceil\log_2 k\rceil R^{\mathrm{on}}_{\ReLU}.
+\end{aligned}
+\label{eq:argmax-cost}
+\end{equation}
+
+\paragraph*{Sigmoid and Tanh}
+Recurrent gates need $\sigma$ and $\tanh$ rather than $\ReLU$. For sigmoid,
+we use the folded approximation in Appendix~G of SIGMA~\cite{sigma}, which
+exploits the even, rapidly decaying correction
+\begin{equation}
+  \delta(x)=\frac{1}{1+e^{|x|}}, \qquad
+  \sigma(x)=\delta(x)+\ind{x\geq 0}\bigl(1-2\delta(x)\bigr).
+  \label{eq:sigmoid-decomp}
+\end{equation}
+We instantiate this approximation with $f=12$ fractional bits and a $q=10$
+bit table index. Let $x_f=\lfloor 2^f x\rfloor$ be the signed ring encoding
+and set $B_0=2^{f+4}$ and $B_f=B_0-1$. For $f=12$, the correction is
+below one output ULP once $|x|\geq 16$, so clipping at $B_f$ preserves the
+encoded endpoint. The secure evaluation first obtains
+$d=\DReLU(x_f)=\ind{x_f\geq 0}$, computes
+\begin{equation}
+\begin{aligned}
+  p&=\BitBA(d,x_f), & a&=2p-x_f,\\
+  i&=\ind{a<B_0}, & c&=B_f+i(a-B_f).
+\end{aligned}
+\label{eq:sigmoid-fold}
+\end{equation}
+where $a=|x_f|$ and $c=\min(a,B_f)$. The clipping comparison is
+$i=\DReLU(a-B_0)\oplus 1$. This order computes the magnitude and clips it
+before truncating the LUT index. Since $c$ is
+nonnegative, truncation by $f-6$ bits produces the ten-bit index
+\begin{equation}
+  t=\left\lfloor\frac{c}{2^{f-6}}\right\rfloor, \qquad
+  T_\delta[j]=\left\lfloor
+    \frac{2^f}{1+\exp(j/2^6)}\right\rfloor,
+  \quad 0\leq j<2^{10}.
+  \label{eq:sigmoid-table}
+\end{equation}
+The table lookup returns $\widehat\delta=T_\delta[t]$. The encoded sigmoid is
+then reconstructed with one mixed-share product,
+\begin{equation}
+  \widehat\sigma_f(x)=\widehat\delta
+    +\BitBA\bigl(d,2^f-2\widehat\delta\bigr).
+  \label{eq:sigmoid-stitch}
+\end{equation}
+Thus the table contains $2^{10}=1024$ entries with grid spacing $2^{-6}$,
+independent of the 32-bit ring width. At $f=12$, inputs at or beyond
+$\lvert x\rvert=16$ map to $\widehat\delta=0$ and therefore to the appropriate
+sigmoid endpoint. The lookup is exact for this integer table; the resulting
+activation is an approximation of the real sigmoid.
+
+Our C++ implementation realizes the two sign tests with the
+$\textsf{BitDec}$ primitive, the three mixed products with
+$\textsf{BitXA}$ (denoted $\BitBA$ here), the index truncation with
+$\Pi_{\mathsf{Trunc}}$, and the final table evaluation with
+$\Pi_{\mathsf{LUT}}$. Consequently, one scalar activation uses one public
+$q=10$ LUT key, one six-bit truncation record, and three $\BitBA$ preprocessing
+records; online it performs two $\textsf{BitDec}$ calls, three mixed products,
+one truncation, and one LUT evaluation. The corresponding communication terms are
+\begin{equation}
+\begin{aligned}
+C^{\mathrm{off}}_{\mathsf{Sigmoid}}
+ &= C^{\mathrm{off}}_{\mathsf{LUT}}(10,\ell)
+  + C^{\mathrm{off}}_{\mathsf{Trunc}}(6)
+  + 3C^{\mathrm{off}}_{\BitBA},\\
+C^{\mathrm{on}}_{\mathsf{Sigmoid}}
+ &= 2C^{\mathrm{on}}_{\textsf{BitDec}}(\ell)
+  + 3C^{\mathrm{on}}_{\BitBA}(\ell)\\
+ &\quad+ C^{\mathrm{on}}_{\mathsf{Trunc}}(6)
+  + C^{\mathrm{on}}_{\mathsf{LUT}}(10,\ell).
+\end{aligned}
+\label{eq:sigmoid-cost}
+\end{equation}
+In the current implementation, the Boolean triples consumed inside
+$\textsf{BitDec}$ are generated by its evaluation calls and are included in
+$C^{\mathrm{on}}_{\textsf{BitDec}}$; the three $\BitBA$ records, truncation record,
+and LUT key are the explicit preprocessing material above.
+This activation uses a common fractional scale at its input and output, and its
+sign tests do not call the segmented comparison path. It is a separate numerical
+construction from SiRNN's sigmoid/tanh approximations; replacing those functions
+with it would change the integer program.
+The vector interface invokes this scalar protocol independently for each
+element. Within one activation, the sign, clipping, lookup, and branch-selection
+dependencies form the online chain used for its round count.
+
+We derive a tanh approximation from this sigmoid using the identity
+$\tanh(x)=2\sigma(2x)-1$, reusing the same table:
+\begin{equation}
+  \widehat{\tanh}_f(x)=2\widehat\sigma_f(2x)-2^f.
+  \label{eq:tanh-cost}
+\end{equation}
+This tanh construction extends SIGMA's sigmoid approximation.
+The input doubling and the subtraction are local shifts and public constants,
+so $\tanh$ has the same communication terms as one sigmoid. The doubled input
+reaches the clipping bound at $|x|=8$, which is the effective unsaturated range
+of this construction. The implementation requires $\ell>f+4$ so that the
+encoded $B=2^{f+4}$ bound is representable; for $f=12$ this means
+$\ell\geq17$. Because $2x$ is formed in the input ring, the tanh preactivation
+must also stay within the ring headroom required by this doubling.
+
+\begin{table}[t]
+\centering
+\caption{Measured error of the SIGMA-based sigmoid and the derived tanh at
+$q=10$ and
+$f=12$. The input scan covers every representable value in $[-16,16)$;
+ULP is $2^{-12}$ at the output.}
+\label{tab:sigma-error}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lrrr}
+\toprule
+Function & Max. absolute error & Max. ULP error & Input at maximum\\
+\midrule
+$\sigma$ & $0.0038451390$ & $15.7497$ & $-0.015380859375$\\
+$\tanh$ & $0.0075682149$ & $30.9994$ & $-0.007568359375$\\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+The errors in Table~\ref{tab:sigma-error} compare the integer LUT output with
+the mathematical functions, not with an ideal public lookup. They were obtained
+by exhaustive enumeration in the precision mirror. The two-party correctness
+test checks representative negative, positive, and saturation points through the
+same secure evaluation path.
+
+\paragraph*{Recurrent cells}
+At the protocol level, these gates compose into a recurrent step. An LSTM
+cell evaluates its four pre-activations as one batched affine map, applies
+$\Pi_{\text{Sigmoid}}$ to three of them and $\tanh$ to the fourth in a single
+batch, and then updates state through
+$c_t=f_t\odot c_{t-1}+i_t\odot g_t$ and $h_t=o_t\odot\tanh(c_t)$. The
+Hadamard products are secret-by-secret, so each is one $\Fmul$ followed by one
+$\Trunc$. This is why the recurrent case needs the arithmetic gates of
+\S\ref{sec:trunc} and not only the comparison gate that suffices for $\ReLU$
+networks. GRU cells differ only in which products appear. Batching within a step
+makes its round count independent of the hidden width; across steps the
+recurrence is inherently sequential, so a $T$-step sequence costs $T$ times the
+per-step depth. State is the only value that persists between steps, and it
+persists as shares, so no intermediate is ever opened.
+
+For a hidden vector of width $h$, count the formulas below per coordinate.
+The four pre-activation gates contribute four parallel Sigmoid-equivalent
+calls, the state update uses two parallel $\MulTr$ calls, and computing
+$h_t$ adds one Tanh-equivalent call followed by one $\MulTr$. Therefore one
+LSTM step communicates
+\begin{equation}
+\begin{aligned}
+C^{\mathrm{off}}_{\mathsf{LSTM}}(h)
+ &=h\bigl(5C^{\mathrm{off}}_{\mathsf{Sigmoid}}
+          +3C^{\mathrm{off}}_{\mathsf{MT}}(f)\bigr),\\
+R^{\mathrm{off}}_{\mathsf{LSTM}}
+ &=\max\{R^{\mathrm{off}}_{\mathsf{Sigmoid}},
+          R^{\mathrm{off}}_{\mathsf{MT}}(f)\},\\
+C^{\mathrm{on}}_{\mathsf{LSTM}}(h)
+ &=h\bigl(5C^{\mathrm{on}}_{\mathsf{Sigmoid}}
+          +3C^{\mathrm{on}}_{\mathsf{MT}}(f)\bigr),\\
+R^{\mathrm{on}}_{\mathsf{LSTM}}
+ &=2R^{\mathrm{on}}_{\mathsf{Sigmoid}}
+   +2R^{\mathrm{on}}_{\mathsf{MT}}(f).
+\end{aligned}
+\label{eq:lstm-cost}
+\end{equation}
+The width multiplies communication but not rounds. A sequence of $T$ steps
+multiplies both communication totals and the online depth in
+\eqref{eq:lstm-cost} by $T$; preprocessing for all steps remains batchable.
+
+\textbf{Inverse and Reciprocal Square Root.} 
+Following the domain reduction strategy from Mosformer~\cite{Mosformer}, 
+our protocol evaluates $\Pi_{\mathsf{Inv}}$ and $\Pi_{\mathsf{Rsqrt}}$
+using $\Pi_{\text{LUT}}$. Specifically, an interval 
+selection protocol identifies the distribution range of $x$, 
+mapping it linearly to a compact subdomain $[1/b, 1]$. The 
+resulting lookup table requires $(1 - 1/b) \cdot 2^f$ entries, where $f$
+denotes the target precision. Equations~\eqref{eq:inverse-cost} and
+\eqref{eq:rsqrt-cost} give the exact costs.
+
+% \textbf{GELU.} 
+% The GELU function is defined as 
+% $\text{GELU}(x) = 0.5x \left(1 + \tanh\left(\sqrt{\frac{2}{\pi}}(x + 0.044715x^3)\right)\right)$. 
+% To securely evaluate $\tanh$, we adapt 
+% the approach of SIGMA~\cite{sigma} by implementing a range-limited lookup table via $\Pi_{\text{LUT}}$.
+
+
+\textbf{Exponentiation.} We instantiate the exponentiation construction of
+BOLT~\cite{Bolt} with $\Pi_{\mathsf{Select}}$ and $\Pi_{\mathsf{LUT}}$.
+For the one-Select/one-LUT instantiation used here, let $q_e$ be the reduced
+LUT index width. The selection determines the public-range branch and the LUT
+then evaluates that branch, so
+\begin{equation}
+\begin{aligned}
+C^{\mathrm{off}}_{\mathsf{Exp}}(q_e)
+ &=C^{\mathrm{off}}_{\ReLU}+C^{\mathrm{off}}_{\mathsf{LUT}}(q_e,\ell),\\
+R^{\mathrm{off}}_{\mathsf{Exp}}(q_e)
+ &=\max\{R^{\mathrm{off}}_{\ReLU},R^{\mathrm{off}}_{\mathsf{LUT}}(q_e,\ell)\},\\
+C^{\mathrm{on}}_{\mathsf{Exp}}(q_e)
+ &=C^{\mathrm{on}}_{\ReLU}+q_e,\\
+R^{\mathrm{on}}_{\mathsf{Exp}}(q_e)
+ &=R^{\mathrm{on}}_{\ReLU}+1.
+\end{aligned}
+\label{eq:exp-cost}
+\end{equation}
+The offline calls are independent and batch, whereas the online LUT consumes
+the selected index and therefore follows the selection.
+
+% For an input vector $\vec{x} \in \mathbb{R}^k$, 
+% the function is defined as 
+% $\text{softmax}(\vec{x})[i] = \frac{\exp(x[i] - x^{\text{max}})}{\sum_{j=0}^{k-1} \exp(x[j] - x^{\text{max}})}$, 
+% where $x^{\text{max}}$ is the maximum element in $\vec{x}$. 
+% Our secure softmax computation proceeds in three phases: 
+% (i) \emph{Maximum selection}: Computing $x^{\text{max}}$ via $\lceil \log_2 k \rceil$ 
+% interactive rounds using $\Pi_{\text{Select}}$; (ii) \emph{Exponentiation}: 
+% Evaluating the exponential terms using BOLT's approximation~\cite{Bolt}, combining 
+% $\Pi_{\text{Select}}$ and $\Pi_{\text{LUT}}$; and (iii) \emph{Division}.
+
+% Given an input vector $\vec{x} \in R^k$, 
+% the function is defined as: 
+% $\text{softmax}(x)[i] = \frac{\exp\left(x[i] - x^{max} \right)}{\sum_{j=0}^{k-1} \exp\left(x[j] - x^{max} \right)}$, 
+% where $x^{max}$ is the max element of the input vector $\vec{x}$. 
+% As the main component of the self-attention mechanism, 
+% the secure softmax computation consists of three modules: 
+% $(\text{i})$ the maximum value selection module. 
+% We calculate the maximum through $\lceil log_2^k \rceil$ rounds of 
+% interaction using the $\Pi_{\text{Select}}$. 
+% $(\text{ii})$ the exponentiation module. This module 
+% adopts the approximation method proposed by BOLT \cite{Bolt}, 
+% implemented collaboratively through $\Pi_{\text{Select}}$ and $\Pi_{\text{LUT}}$. 
+% $(\text{iii})$ the division module. 
+
+\subsection{The Protocol \texorpdfstring{$\Pi_{\mathsf{Infer}}$}{Pi-Infer}}\label{sec:infer-proto}
+Algorithm~\ref{alg:infer} describes the comparison gate used in an inference
+composition. Private linear layers require secure multiplication and rescaling
+in addition to local arithmetic. Each comparison gate runs the blind and open step, the parallel
+segment evaluation, and the multiplication-scan stitch. Reductions such as maxpool
+and argmax fold pairwise comparisons, and a table or spline activation runs
+$\nseg$ parallel reduced-domain lookups. All comparison gates of a layer are
+batched, so a layer costs a constant number of rounds regardless of width.
+
+\begin{algorithm}[t]
+\caption{One comparison gate ($\Pi_{\mathsf{Infer}}$)}
+\label{alg:infer}
+\textbf{Input:} $P_b$ holds $\ashare{x}_b$, the preprocessed segment keys $\{k\seg{j}\}_j$, and $\ashare{r_{\mathrm{in}}}_b$. \\
+\textbf{Output:} $P_b$ holds $\bshare{z}_b=\bshare{\ind{x<c}}_b$, for example the $\DReLU$ bit.
+
+\vspace{0.3em}
+\textbf{[Online]} on input $\ashare{x}$, each $P_b$:
+\begin{algorithmic}[1]
+\State $\ashare{\xhat}_b\gets\ashare{x}_b+\ashare{r_{\mathrm{in}}}_b$, then open $\xhat$ \Comment{1 round, $\ell$ bits}
+\State locally split $\xhat\to(\xhat\seg{1},\dots,\xhat\seg{\nseg})$
+\State \textbf{in parallel for} $j\in[\nseg]$: $\bshare{L_j}(,\bshare{e_j})\gets\Eval(b,k\seg{j},\xhat\seg{j})$ \Comment{Grotto-style prefix-parity walk}
+\State prefix-\textsc{and} scan $\bshare{E_{j+1}}\gets\bshare{E_j}\wedge\bshare{e_j}$, then $\bshare{z}\gets\bigoplus_j \bshare{E_j}\wedge\bshare{L_j}$ \Comment{$\bigO(\log\nseg)$ rounds}
+\State apply wrap-correction (local XOR), then $\mathsf{B2A}$ if an arithmetic result is needed
+\State \textbf{return} $\bshare{z}_b=\bshare{\ind{x<c}}_b$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Theoretical Analysis}
+\paragraph*{Online cost}
+For a Boolean comparison on an $\ell$-bit input, opening $\xhat$ costs $\ell$
+bits in one round, the $\nseg$ Grotto walks communicate nothing, and the
+$2(\nseg-1)$ scan \textsc{and}s cost $4(\nseg-1)$ bits in
+$\lceil\log_2\nseg\rceil$ rounds. The exact total is therefore
+\begin{equation}
+C^{\mathrm{on}}_{\mathsf{Cmp}}=\ell+4(\nseg-1),\qquad
+R^{\mathrm{on}}_{\mathsf{Cmp}}=1+\lceil\log_2\nseg\rceil.
+\end{equation}
+An arithmetic comparison output adds one
+$\mathsf{B2A}:\F_2\rightarrow\Z_{2^p}$, namely $\lambda+p$ bits and one round.
+Its exact online total is therefore
+\begin{equation}
+C^{\mathrm{on}}_{\mathsf{CmpA}}=\ell+4(\nseg-1)+\lambda+p,qquad
+R^{\mathrm{on}}_{\mathsf{CmpA}}=2+\lceil\log_2\nseg\rceil.
+\end{equation}
+For a batch of $B$ independent comparisons, communication becomes
+$B C^{\mathrm{on}}_{\mathsf{Cmp}}$, whereas the round count is unchanged. An
+$\ell$-bit $\Fmul$ similarly costs $2\ell$ online bits in one round; the exact
+truncation and activation costs are stated in their respective subsections.
+
+\paragraph*{Offline cost}
+When Boolean shares of the threshold bits are already available, one comparison
+key costs $C_{\mathrm{key}}(\ell,\boldsymbol{\wseg})$ bits and $d+2$ rounds,
+where $d=\max_j\wseg_j$. Its scan triples add
+$4(\nseg-1)(\lambda+1)$ bits but no round because their COT generation is
+batched with $\PREP$. Thus
+\begin{equation}
+C^{\mathrm{off}}_{\mathsf{Cmp}}
+=C_{\mathrm{key}}(\ell,\boldsymbol{\wseg})
+ +4(\nseg-1)(\lambda+1),\qquad
+R^{\mathrm{off}}_{\mathsf{Cmp}}=d+2.
+\end{equation}
+If the threshold is initially arithmetic-shared, $\Pi_{\mathsf{Split}}$ adds
+$(2\ell-3)(2\lambda+4)$ bits. The first random-COT round of $\PREP$ overlaps
+the triple-generation round of Split, but retargeting and the $d$
+correction-word rounds wait for the Boolean threshold bits, so the two depths
+add rather than overlap:
+\begin{equation}
+C^{\mathrm{off}}_{\mathsf{CmpAThr}}
+=C^{\mathrm{off}}_{\mathsf{Cmp}}+(2\ell-3)(2\lambda+4),\qquad
+R^{\mathrm{off}}_{\mathsf{CmpAThr}}=\ell+d+1.
+\end{equation}
+A batch of $B$ gates multiplies the communication and hash counts by $B$ while
+preserving these round counts. The cGGM work is
+$\sum_j(3\cdot2^{\wseg_j-1}+3)$ hashes per gate; for uniform widths this is
+$\nseg(3\cdot2^{\ell/\nseg-1}+3)$.
+
+For a complete inference circuit, let $B_{t,g}$ be the number of independent
+instances of primitive $g$ in nonlinear layer $t$, using a nonoverlapping gate
+decomposition. Using the costs above,
+\begin{equation}
+\begin{aligned}
+C^{\mathrm{off}}_{\mathsf{Infer}}
+ &=\sum_t\sum_g B_{t,g}C^{\mathrm{off}}_g,&
+R^{\mathrm{off}}_{\mathsf{Infer}}
+ &=\max_{t,g:B_{t,g}>0}R^{\mathrm{off}}_g,\\
+C^{\mathrm{on}}_{\mathsf{Infer}}
+ &=\sum_t\sum_g B_{t,g}C^{\mathrm{on}}_g,&
+R^{\mathrm{on}}_{\mathsf{Infer}}
+ &=\sum_t\max_{g:B_{t,g}>0}R^{\mathrm{on}}_g.
+\end{aligned}
+\label{eq:infer-cost}
+\end{equation}
+All gates in one layer batch, while data dependencies between layers add their
+online depths. Input-independent preprocessing for the entire circuit batches
+globally, so only its maximum round depth remains.
+
+\paragraph*{Security}
+\begin{proposition}
+$\Pi_{\mathsf{Infer}}$ securely realizes secure comparison/$\DReLU$ against a semi-honest adversary corrupting one party, in the $(\Fcot,\Frand)$-hybrid
+model.
+\end{proposition}
+\begin{IEEEproof}[Proof sketch]
+The only opened value is $\xhat=x+r_{\mathrm{in}}$, a one-time pad of $x$, which the simulator samples uniformly, and the public digits $\xhat\seg{j}$ are a
+deterministic local function of it and add no leakage. The $\PREP$ transcript is
+simulated from $\Fcot$, $\Frand$ outputs are public coins, per-level correction
+words are reconstructed from shares uniform given the view of one party, and segment
+$\Eval$ is provenance-agnostic prefix-parity on a key the simulator already produces.
+The multiplication scan, $\CCMP$, $\mathsf{B2A}$, and $\BitBA$ are simulated
+from their standard functionalities; the last uses the one-round construction
+reviewed in \S\ref{sec:prelim}. Composing the simulators yields a view indistinguishable from
+the real execution.
+\end{IEEEproof}
+
+% =====================================================================
+\section{Evaluation}\label{sec:eval}
+
+The available experiments characterize the cost of segmented comparison
+primitives, the numerical effects of fixed-point formats, the comparison domains
+used in mixed-precision rescaling, and the consistency of a historical Google-30
+SCI replay. The primitive timings come from two-party C++ executions on localhost.
+The ImageNette accuracy results
+come from cleartext integer inference, including a CUDA wide-accumulator path.
+The historical SCI replay executes 30 complete FastGRNN sequences securely.
+These measurements do not yet provide secure end-to-end costs for SCI + ours.
+
+The local CNN/FastGRNN/LSTM timing rows marked \texttt{structure\_only} execute
+a cleartext fixed-point runtime. Rows marked \texttt{smoke} check program
+execution. Neither supplies secure offline/online latency or communication;
+those fields remain unavailable until the corresponding private executor runs.
+We first present numerical evidence and primitive measurements, then specify
+the end-to-end comparison that remains to be carried out.
+
+\paragraph*{Fixed-point numerical sensitivity}
+We distinguish four numerical models of fixed-point inference. E0-B encodes
+values as $\lfloor 2^s z\rfloor\bmod 2^\ell$ and reduces stored additions
+in $\mathbb Z_{2^\ell}$. Linear and convolution layers accumulate products
+in an $(\ell+s)$-bit temporary ring, apply one signed floor truncation by
+$s$ after each dot product, and return the output to $\ell$ bits.
+Elementwise products are truncated individually. ReLU selects the encoded
+input or zero using the ring sign bit. In the reported LSTM precision scan,
+sigmoid and tanh are evaluated as real functions and immediately re-encoded;
+this scan measures arithmetic quantization with ideal activation gates.
+The $q=10$, $f=12$ SIGMA-based activation errors in
+Table~\ref{tab:sigma-error} are measured separately.
+
+The strict-ring study, E0-U-R, uses one signed Q$(\ell,s)$ format for
+all inputs, weights, biases, inference-time BN affine coefficients, and
+operator outputs. Let $W_\ell(z)$ denote reduction modulo $2^\ell$
+followed by interpretation in $[-2^{\ell-1},2^{\ell-1}-1]$.
+Encoding is $W_\ell(\lfloor 2^s z\rfloor)$. Each scalar product,
+accumulator addition, bias lift, and residual addition is reduced in
+$\mathbb Z_{2^\ell}$. A convolution or linear output is therefore
+\[
+q_y=W_\ell\!\left(\left\lfloor\frac{
+W_\ell(\sum_i q_{x_i}q_{w_i}+2^s q_b)}{2^s}\right\rfloor\right).
+\]
+The numerator represents ring additions of ring products; signed floor
+rescaling occurs once after the complete dot product. BN affine maps
+follow the same rule. Global average pooling first reduces its sum in
+the same ring, then floor-divides its signed representative by the public
+window size. ReLU, max pooling, and argmax compare signed ring codes.
+The logical accumulator width equals $\ell$. A host integer container or
+integer limb decomposition implements these modular operations without
+retaining out-of-ring high bits for subsequent rescaling.
+
+The historical saturating control, E0-U-S, also uses uniform
+Q$(\ell,s)$ storage, but floors and saturates encoding and writeback.
+Its convolution and linear layers accumulate unscaled integer products
+and lifted biases in overflow-checked 128-bit temporaries, then rescale
+once. Residual additions saturate at writeback; global average pooling
+divides the wide sum before saturation. E0-U-S separates storage
+quantization from accumulator overflow and has different arithmetic from
+E0-U-R.
+
+E0-Q-fixed uses a uniform signed Q$(\ell,s)$ format for the entire network.
+Every input, quantized weight, bias, BN affine coefficient, intermediate
+tensor, and output score is an integer code in
+$[-2^{\ell-1},2^{\ell-1}-1]$ with scale $2^{-s}$. Thus $s$ controls the
+fractional resolution and $\ell-s$ counts the remaining bits, including
+the sign. Each scalar product is formed in a host temporary, floor-rescaled
+immediately by $s$, and saturated back to $\ell$ bits. Each dot-product term
+is then accumulated with an $\ell$-bit saturating addition. Global average
+pooling also saturates each addition before division by the public window
+size. BN affine maps, residual additions, pooling, ReLU, logits, and argmax
+remain in the integer domain; floating point is used to encode constants
+and to evaluate the reference model. This study measures the combined
+effects of uniform storage, product rescaling, and finite-width accumulation,
+and serves as a per-term saturating-accumulation control.
+
+The uniform-study protocol enumerates all legal
+$s\in\{0,\ldots,\ell-1\}$ for each $\ell\in\{12,16,20,24,28,32\}$
+on an independent 512-example calibration subset,
+selects the highest-accuracy $s$ (ties use the smaller $s$), and evaluates the
+selected pair on the complete test split. The original E0-B references are
+97.48\% for MLP on MNIST, 88.22\% for ResNet20 on CIFAR-10, and 95.90\% for
+the synthetic LSTM task. The uniform studies use ImageNette, a 10-class
+ImageNet subset, with 3,925 validation images and ImageNet-1K-pretrained
+ResNet-50/101/152 models. They retain the original 1,000-class output heads
+and use the same class-balanced training calibration subset. For the E0-U
+variants, the measurement protocol includes classification accuracy and
+per-example prediction agreement with FP32; validation images do not
+participate in scale selection.
+
+The earlier E0-B results on the reference tasks are as follows; parentheses
+give the training-selected fractional width.
+\begin{center}
+\small
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lrrrrrr}
+\toprule
+Model & $\ell=12$ & $\ell=16$ & $\ell=20$ & $\ell=24$ & $\ell=28$ & $\ell=32$\\
+\midrule
+MLP/MNIST & 96.80 (6) & 97.49 (8) & 97.49 (8) & 97.49 (8) & 97.49 (8) & 97.49 (8)\\
+ResNet20/CIFAR-10 & 14.84 (7) & 76.40 (8) & 87.97 (11) & 88.23 (14) & 88.23 (14) & 88.23 (14)\\
+LSTM/synthetic, ideal gates & 95.60 (7) & 95.60 (7) & 95.60 (7) & 95.60 (7) & 95.60 (7) & 95.60 (7)\\
+\bottomrule
+\end{tabular}
+}
+\end{center}
+
+The historical ImageNette E0-U-S results are shown in
+Table~\ref{tab:e0-uniform}. Each model contributes all
+132 calibration candidates and six validation rows. The table reports the
+training-selected $s$, validation Top-1, the difference from the FP32
+reference, and per-example agreement with FP32.
+
+Under E0-U-S arithmetic, the selected ResNet-50 16-bit format reaches
+$65.554\%$ (a $-9.860$
+percentage-point difference), while 20 bits reaches $74.803\%$. At 24 bits,
+Top-1 is $75.439\%$ versus the FP32 $75.414\%$, but agreement is $97.834\%$;
+28 and 32 bits use the same $s=20$ and are exactly equal, with $99.949\%$
+agreement. ResNet-101 shows $62.726\%$ at 16 bits and $78.599\%$ at 20 bits.
+Its 24, 28, and 32-bit selected configurations use $s=15$, have no storage
+clipping, and produce identical predictions with $78.344\%$ Top-1 and
+$97.656\%$ agreement. ResNet-152 reaches $59.822\%$ at 16 bits and
+$77.401\%$ at 20 bits; its 24, 28, and 32-bit rows are identical at
+$77.605\%$ Top-1 and $97.707\%$ agreement.
+
+In this saturating control, the temporary register has a fixed logical width
+of 128 bits. CUDA evaluates
+the linear operators with integer limb matrix multiplication and exact
+128-bit reconstruction. Absolute-value bounds cover every original
+accumulation prefix and reconstruction prefix; all 396 calibration and 18
+validation rows complete without temporary overflow. The FP32 reference
+disables TF32 and attains $75.414\%$, $78.089\%$, and $77.478\%$ for the
+three models, respectively.
+
+The saturating-control results separate two precision effects. The 16-bit rows have substantial
+parameter or activation clipping, while several 20-bit rows still have a small
+number of clipped writes. The selected 24-bit rows have no clipping and are
+within $0.255$ percentage points of their FP32 references, but agreement remains
+below 100\%. These results motivate wider fixed-point formats for preserving
+accuracy in large CNNs. The required width depends on the model, scale, range,
+and fidelity metric. Scale selection maximizes calibration Top-1, so the
+reported rows do not optimize prediction
+agreement: for ResNet-101/152, $s=15$ wins Top-1 although higher-$s$
+calibration candidates attain greater FP32 agreement. Increasing $\ell$ alone
+leaves the selected $s=15$ predictions unchanged. The 24-bit accuracy result
+is specific to the wide-accumulator saturating control; it does not establish
+the accuracy of strict $\mathbb Z_{2^\ell}$ inference, for which no complete
+validation results are reported here. The logical 128-bit temporary is a
+cleartext arithmetic choice, not an implemented 128-bit two-party accumulator.
+Matching its accuracy in a secure backend requires the corresponding expansion,
+truncation, and saturation semantics.
+
+\input{tables/e0_uniform_storage.tex}
+
+The strict E0-Q-fixed control retains its original results. Its selected
+20-bit configurations all use $s=15$ and attain $71.847\%$, $69.936\%$, and
+$62.548\%$ Top-1; the 24-bit configurations use $s=17$ and attain
+$79.694\%$, $81.376\%$, and $79.720\%$. Per-product rescaling and
+saturating accumulation yield different accuracy curves. In particular,
+saturating the $7\times7$ pooling sum before division limits a nonnegative
+Q$(24,17)$ pooled feature to approximately $64/49$. The historical FP32
+references are $75.414\%$, $78.115\%$, and $77.478\%$; the historical
+ResNet-101 baseline differs from E0-U-S by one example, and the earlier run did
+not record its TF32 settings. The control measures storage quantization together with these
+accumulation effects.
+
+\paragraph*{Narrow ReLU interfaces with a wider backbone}
+A separate ImageNette experiment retains Q$(24,15)$ storage outside ReLU and
+wide accumulation, but converts each ReLU input and output to a signed 16-bit
+format. Conversion uses signed floor rescaling and saturation, followed by an
+exact shift back to the backbone scale. The pretrained weights, original
+1,000-class output head, and 3,925-image validation set are unchanged.
+Fractional widths are selected on 512 training images; Q$(16,12)$ is an
+additional prespecified comparison.
+
+At Q$(16,12)$, ResNet-50 reaches $75.2866\%$ Top-1 against the FP32
+$75.4140\%$, and ResNet-152 reaches $77.3248\%$ against $77.4777\%$.
+The corresponding FP32 prediction agreements are $97.5796\%$ and
+$97.2484\%$. These losses are smaller than those of uniform 16-bit storage.
+The training-selected ReLU formats are Q$(16,14)$ for ResNet-50 and
+Q$(16,11)$ for ResNet-152, with Top-1 of $76.2548\%$ and $77.2484\%$.
+For ResNet-50, the higher Top-1 coexists with only $90.0637\%$ FP32 agreement,
+showing why the two metrics must be reported separately. These cleartext results
+show that narrow activation interfaces can preserve accuracy within a wider
+numerical program. Their secure cost includes rescaling and saturation as well
+as the activation itself. The comparison domains of these conversions depend
+on the implemented rounding and range semantics; the following trace illustrates
+wide-domain comparisons in mixed-precision rescaling.
+
+\paragraph*{Wide comparison domains in mixed-precision rescaling}
+We analyze an existing single-step Google-30/FastGRNN execution with batch size
+128 over ten fresh queries. Six SCI-compatible signed rescaling calls, arising
+from matrix multiplication and elementwise or scalar products, retain their
+24- or 32-bit output rings and round division by a power of two toward zero.
+Per query, these calls invoke $6{,}528$ comparisons over 23-bit domains and
+$51{,}200$ comparisons over 31-bit domains, counting each joint instance once.
+Thus the mixed-width program retains substantial wide-domain nonlinear work
+alongside its narrow tensor and activation interfaces. The domains follow from
+these signed rescaling operations: truncation with ring reduction can instead
+use smaller domains, such as a 4-bit comparison for a 36-to-32-bit reduction
+with a right shift of four. The relevant FSS width is that of the actual
+comparison, rather than the storage width or source ring alone.
+
+\paragraph*{Historical Google-30 replay}
+We reproduced the SiRNN toolchain using Speech Commands v0.01, the official
+EdgeML FastGRNN implementation, SeeDot quantization, and SCI-OT. The weights
+were trained locally with seed 42, hidden width 100, low-rank dimensions 16/35,
+and 300 training epochs; they are not the paper authors' original weights.
+The generated program processes 99 steps of 32 features and predicts 30 classes.
+It uses mixed 8/16/32-bit values rather than a uniform 32-bit numerical format.
+Its sigmoid interface uses 16-bit input/output with fractional widths 7 and 14;
+tanh uses 16-bit input/output with fractional width 7.
+The server privately holds matrix weights and biases, while the learned
+scalars $\zeta$ and $\nu$ are public constants in the compiled program.
+
+On the 6,835-example test split, the historical FP32 model obtains
+$6{,}177/6{,}835=90.3731\%$ and the SeeDot reference obtains
+$6{,}134/6{,}835=89.7440\%$. These are historical reference accuracies:
+checkpoint selection used test accuracy, and the input-bound computation used
+both training and test data. They therefore do not constitute an independent
+final quality evaluation.
+
+SCI was run on one fixed example per class, for 30 complete sequences.
+All 30 predictions match the SeeDot reference; 27 match the labels.
+This establishes final-prediction consistency on that subset, not full-test-set
+secure accuracy or per-operator integer equivalence. In particular, the
+historical SeeDot reference uses floating exponential/tanh evaluation before
+integer encoding, whereas SCI uses its secure function approximations.
+The SCI replay also extends 8-bit logits to 16 bits before ArgMax to preserve
+the signed comparison range. Its cross-sample latency summaries are replay
+statistics, not repeated system-performance estimates.
+
+\subsection{Efficiency of the Input Decomposition}\label{sec:eval-split}
+
+The measured segmented comparison benchmark uses two parties on localhost,
+32-bit inputs, and ten measured runs for each segment count.
+Table~\ref{tab:seg-measured} reports run means. Offline work includes arithmetic
+threshold bit decomposition, batched cGGM/DPF generation, correction-word
+exchange, and Boolean triples for the cross-segment scan. The online phase
+accepts a public query and includes local tree evaluation and the scan's masked
+openings. Private-input masking and final output reconstruction are outside
+this timing boundary. Consequently these rows measure a comparison primitive,
+not private network inference.
+
+\begin{table}[t]
+\centering
+\caption{Measured 32-bit two-party localhost comparison primitive. Times are
+means of ten runs. Online bytes are the historical sent-plus-received counter
+of one party (link traffic), and rounds count dependent scan openings.
+The query is public; private-input conversion and final reconstruction are
+excluded.}
+\label{tab:seg-measured}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{rrrrrr}
+\toprule
+$\nseg$ & \shortstack{Offline\\ms} & \shortstack{Online\\ms} &
+\shortstack{Total\\ms} & \shortstack{Online\\bytes} & \shortstack{Scan\\rounds}\\
+\midrule
+2  & 39.8306 & 0.2208 & 40.0514 & 8   & 1\\
+3  & 37.2425 & 0.1923 & 37.4348 & 16  & 2\\
+4  & 36.3243 & 0.2240 & 36.5483 & 24  & 2\\
+8  & 40.5740 & 0.4577 & 41.0317 & 56  & 3\\
+16 & 40.0162 & 1.5401 & 41.5563 & 120 & 4\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All measured rows pass comparison reconstruction. Among these configurations,
+$\nseg=4$ has the lowest mean total time, $36.5483$\,ms, with $277{,}920$
+offline bytes under the same counter convention. This is a local measurement,
+not a LAN/WAN optimum. No completed depth-32 monolithic row is available, so
+we do not assign it a latency or derive a measured speedup from it. The online
+scan depth is $\lceil\log_2\nseg\rceil$, consistent with the balanced reduction.
+The measurements also charge arithmetic threshold decomposition; the tree-only
+bound in Theorem~\ref{thm:cost} starts from Boolean-shared threshold bits.
+
+\subsection{Planned Comparison on Complete Integer Programs}\label{sec:eval-compose}
+
+The next comparison will start with the native Google-30 mixed-width program.
+The first target backend, \emph{SCI + ours}, will preserve SCI's linear layers,
+expansion, truncation, activation approximations, and output reconstruction.
+Only matching comparison/MSB operations will be replaced by segmented FSS.
+Acceptance requires exact agreement of reconstructed integer operator outputs
+with SCI and identical final predictions on the complete fixed test set;
+random secret shares themselves need not match. This same-program test differs
+from the historical SeeDot-to-SCI final-prediction replay. The separate
+SIGMA-based activation in Section~\ref{sec:infer} will not be substituted into
+this comparison because it changes the numerical algorithm.
+
+The system comparison will allow each backend to use its native width
+optimizations subject to a prespecified Top-1 loss of at most 1.0 percentage
+point relative to the same FP32 checkpoint. Prediction agreement will be
+reported alongside Top-1. Checkpoint and quantization choices will use training
+or calibration data before the final evaluation. A second comparison will hold
+the complete integer program fixed, including scales, accumulation widths,
+rounding, truncation, and activation approximations, to isolate backend costs.
+SCI/SiRNN OT, SCI + ours, and MP-SPDZ~\cite{mpspdz} \texttt{semi2k} with real OT preprocessing
+will form the two-party, dealerless, semi-honest comparison once the matching
+executors are available. ABY-64 will provide uniform-64-bit context; its separate
+placement does not imply a trusted dealer. Dealer-assisted FSS will be reported
+under its additional preprocessing trust assumption.
+
+Width controls will compare the native program with uniform 16-bit and 32-bit
+storage/I/O, while allowing necessary wider products and accumulators and
+per-tensor fractional scales. A strict same-ring variant will diagnose modular
+wraparound separately. Uniform 64-bit storage is a conditional extension.
+The experiment will record actual comparison/FSS domain widths, invocation
+counts, and conversion costs, and compare direct wide-domain computation with
+rescaling, narrow-domain computation, and any necessary restoration. These
+controls test width requirements for the evaluated models and quality criterion,
+not a universal lower bound.
+
+Performance runs will use identical hardware, thread counts, batches, and
+input order, with LAN/WAN conditions and repetitions fixed before measurement.
+Results will include offline, online, and total latency; communication as both
+parties' sent-byte sum; dependent rounds; and each party's peak memory.
+Initialization, private-input conversion, key/triple generation, expansion,
+truncation, and reconstruction will have explicit phase boundaries. Any
+initialization amortization will state its query count, while one-time keys,
+masks, and triples will be freshly consumed for each query. A width/segment-count
+sweep will include the domains used by the program and 16/20/24/32-bit coverage;
+timeouts and memory limits will remain censored observations. For CNNs, the
+end-to-end comparison will use ResNet-50 and ResNet-152 with a uniform
+Q$(32,12)$ configuration, accounting for conversions alongside nonlinear
+evaluation. Secure end-to-end performance for these segmented-backend networks
+has not yet been measured.
+
+% =====================================================================
+\section{Conclusion}\label{sec:conc}
+
+Segmenting the function domain reduces the exponential tree-expansion cost
+of dealerless FSS while retaining a balanced secure scan for comparison.
+Two-party localhost measurements establish a working 32-bit comparison
+primitive. The numerical studies motivate wide fixed-point arithmetic to
+preserve accuracy in large networks, while the mixed-width FastGRNN trace
+identifies 23- and 31-bit comparison domains in signed rescaling. Together,
+these results motivate efficient dealerless generation for wide nonlinear
+domains even when tensor storage and activation interfaces use mixed precision.
+The historical Google-30 replay supplies subset-level SCI consistency evidence.
+The next step is to measure whether the segmented comparison improves a
+complete mixed-width program under fixed integer
+semantics and a shared accuracy threshold; the present results do not establish
+an end-to-end advantage over OT inference.
+
+% =====================================================================
+\appendices
+
+\section{Full Generation and Evaluation Procedures}\label{app:full}
+
+The per-segment generation $\Pi_{\mathsf{Seg}}$ and evaluation are both given in
+full in the main body (Algorithm~\ref{alg:gen}), building on $\Pi_{\mathsf{Split}}$
+(Algorithm~\ref{alg:split}) and $\PREP$ (Algorithm~\ref{alg:prep}). The \textbf{[Offline]}
+block constructs the boolean DPF key via Half-Tree correlated GGM with parallel COT
+correlations. The \textbf{[Online]} block shows the Grotto prefix-parity walk that
+recovers the boolean comparison share from the opened $\xhat\seg{j}$ with $\bigO(\wseg_j)$
+node touches and one $\BitBA$ mixed product. Here we detail how the cross-segment
+scan completes the overall comparison from the $\nseg$ per-segment boolean shares.
+
+% =====================================================================
+
+
+\section{FSS-based Nonlinear Building Blocks}\label{appendix:Secure 3PC Protocols}
+
+\subsection{GELU and SiLU}
+To reduce overhead, we design a secure GELU protocol ($\Pi_{\text{GELU}}$,
+Algorithm~\ref{alg:gelu}) inspired by SIGMA~\cite{sigma}. Because the encoded
+difference $\delta(x)=\text{ReLU}(x)-\text{GELU}(x)$ is rounded to zero
+outside $[-4,4]$, we tabulate only $[0,4]$. Discretizing this interval at
+$2^{-6}$ precision gives 256 entries,
+$\vec{T}_{\text{GELU}}[i]=\lfloor\delta(i/2^6)2^f\rfloor$ for
+$i\in[0,255]$. SiLU uses the same LUT-oriented pipeline with a different
+public table~\cite{sigma}.
+
+\begin{algorithm}[ht]
+  \caption{GELU ($\Pi_{\text{GELU}}$)}
+  \label{alg:gelu}
+  \textbf{Input:} $P_b$ holds $\ashare{x}_b$ and the public table $\vec{T}_{\text{GELU}}$. \\
+  \textbf{Output:} $P_b$ holds $\ashare{z}_b$ where $z=\text{GELU}(x)$.
+  \begin{algorithmic}[1]
+    \State $\ashare y \leftarrow \Trunc(\ashare x,f-6)$
+    \State $\ashare{p_x}\leftarrow\Pi_{\mathsf{Select}}(\ashare y,\ashare x)$ and $\ashare{p_y}\leftarrow\Pi_{\mathsf{Select}}(\ashare y,\ashare y)$, reusing the sign bit of $y$
+    \State $\ashare a\leftarrow2\ashare{p_y}-\ashare y$, $\ashare\delta\leftarrow256-\ashare a$
+    \State $\ashare i\leftarrow\Pi_{\mathsf{Select}}(\ashare\delta,\ashare a)$
+    \State \textbf{return} $\ashare z=\ashare{p_x}-\Pi_{\mathsf{LUT}}(\ashare i,\vec{T}_{\text{GELU}})$
+  \end{algorithmic}
+\end{algorithm}
+
+\textbf{Complexity.} The two Select calls in Line~2 reuse one DReLU bit but
+require two $\ell$-bit $\BitBA$ calls. The later Select is independent, and
+the table index has $q_g=8$ bits. Consequently,
+\begin{equation}
+\begin{aligned}
+C^{\mathrm{off}}_{\mathsf{GELU}}
+ &=C^{\mathrm{off}}_{\mathsf{Trunc}}(f-6)
+   +C^{\mathrm{off}}_{\DReLU}\\
+ &\quad+8\ell(\lambda+\ell+1)+C^{\mathrm{off}}_{\ReLU}\\
+ &\quad+C^{\mathrm{off}}_{\mathsf{LUT}}(8,\ell),\\
+R^{\mathrm{off}}_{\mathsf{GELU}}
+ &=\max\{R^{\mathrm{off}}_{\mathsf{Trunc}}(f-6),
+          R^{\mathrm{off}}_{\ReLU},\\
+ &\qquad R^{\mathrm{off}}_{\mathsf{LUT}}(8,\ell),3\},\\
+C^{\mathrm{on}}_{\mathsf{GELU}}
+ &=C^{\mathrm{on}}_{\mathsf{Trunc}}(f-6)
+   +C^{\mathrm{on}}_{\DReLU}+2(\ell+1)
+   +C^{\mathrm{on}}_{\ReLU}+8,\\
+R^{\mathrm{on}}_{\mathsf{GELU}}
+ &=R^{\mathrm{on}}_{\mathsf{Trunc}}(f-6)
+   +2R^{\mathrm{on}}_{\ReLU}+1.
+\end{aligned}
+\label{eq:gelu-cost}
+\end{equation}
+The online stages are sequential because each produces the next index. SiLU
+has the same cost when instantiated with the stated pipeline.
+
+\subsection{Inverse and Reciprocal Square Root}
+Following Mosformer~\cite{Mosformer}, we compute division
+($\Pi_{\mathsf{Inv}}$, Algorithm~\ref{alg:inverse}) via compressed intervals.
+A positive input $x$ is normalized into $[1/b,1]$ by finding $k$ such that
+$b^k\leq x<b^{k+1}$. We apply $\Pi_{\DReLU}$ against the $n$ public
+thresholds $b^i$ in one batch, where
+$n=\lfloor\log_b(2^{2f})-1\rfloor$, convert the resulting bits to arithmetic
+shares, and set $k=\sum_i d[i]$. A first LUT returns the factor
+$b^{-(k+1)}$ and a second LUT evaluates the reciprocal on the normalized
+domain. The latter has $(1-1/b)2^f$ entries before power-of-two padding.
+
+Our reciprocal square-root protocol ($\Pi_{\mathsf{Rsqrt}}$,
+Algorithm~\ref{alg:rsqrt}) reuses this interval-identification pipeline. It
+adds a parallel scaling-factor LUT and substitutes the reciprocal-square-root
+table in the normalized domain.
+
+\begin{algorithm}[ht]
+  \caption{Inverse ($\Pi_{\text{Inv}}$)}
+  \label{alg:inverse}
+  \textbf{Input:} $P_b$ holds $\ashare{x}_b$, scaling base $b$, precision $f$, and public tables $\vec{T}_{\text{exp}}$ and $\vec{T}_{\text{inv}}$. \\
+  \textbf{Output:} $P_b$ holds $\ashare{z}_b$ where $z=1/x$.
+  \begin{algorithmic}[1]
+    \For{$i = 1$ to $n$ in parallel}
+      \State $\bshare{d[i]}\leftarrow\Pi_{\DReLU}(\ashare x-b^i)$
+    \EndFor
+    \State $\ashare{k}\leftarrow\sum_{i=1}^{n}\mathsf{B2A}(\bshare{d[i]})$
+    \State $\ashare t\leftarrow\Pi_{\mathsf{LUT}}(\ashare{k+1},\vec{T}_{\text{exp}})$
+    \State $\ashare q\leftarrow\MulTr(\ashare x,\ashare t;f)$
+    \State $\ashare w\leftarrow\Pi_{\mathsf{LUT}}(\ashare{q-1/b},\vec{T}_{\text{inv}})$
+    \State \textbf{return} $\ashare z\leftarrow\MulTr(\ashare t,\ashare w;f)$
+  \end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[ht]
+  \caption{Reciprocal Square Root ($\Pi_{\text{Rsqrt}}$)}
+  \label{alg:rsqrt}
+  \textbf{Input:} As in $\Pi_{\mathsf{Inv}}$, with public tables $\vec{T}_{\text{exsqrt}}$ and $\vec{T}_{\text{rsqrt}}$. \\
+  \textbf{Output:} $P_b$ holds $\ashare z_b$ where $z=1/\sqrt{x}$.
+  \begin{algorithmic}[1]
+    \State Perform the batched interval comparisons and B2A conversion of Algorithm~\ref{alg:inverse} to obtain $\ashare k$.
+    \State $\ashare t\leftarrow\Pi_{\mathsf{LUT}}(\ashare{k+1},\vec{T}_{\text{exp}})$ and $\ashare s\leftarrow\Pi_{\mathsf{LUT}}(\ashare{k+1},\vec{T}_{\text{exsqrt}})$ in parallel
+    \State $\ashare q\leftarrow\MulTr(\ashare x,\ashare t;f)$
+    \State $\ashare w\leftarrow\Pi_{\mathsf{LUT}}(\ashare{q-1/b},\vec{T}_{\text{rsqrt}})$
+    \State \textbf{return} $\ashare z\leftarrow\MulTr(\ashare s,\ashare w;f)$
+  \end{algorithmic}
+\end{algorithm}
+
+\textbf{Complexity.} Let $q_k=\lceil\log_2(n+1)\rceil$ and let
+$q_i=\lceil\log_2((1-1/b)2^f)\rceil$ after padding the normalized table. The
+$n$ comparisons and conversions are parallel; the two multiplications each
+include exact truncation. Inverse therefore costs
+\begin{equation}
+\begin{aligned}
+C^{\mathrm{off}}_{\mathsf{Inv}}
+ &=nC^{\mathrm{off}}_{\DReLU}
+   +C^{\mathrm{off}}_{\mathsf{LUT}}(q_k,\ell)
+   +C^{\mathrm{off}}_{\mathsf{LUT}}(q_i,\ell)
+   +2C^{\mathrm{off}}_{\mathsf{MT}}(f),\\
+R^{\mathrm{off}}_{\mathsf{Inv}}
+ &=\max\{R^{\mathrm{off}}_{\DReLU},
+          R^{\mathrm{off}}_{\mathsf{LUT}}(q_k,\ell),\\
+ &\qquad R^{\mathrm{off}}_{\mathsf{LUT}}(q_i,\ell),
+          R^{\mathrm{off}}_{\mathsf{MT}}(f)\},\\
+C^{\mathrm{on}}_{\mathsf{Inv}}
+ &=nC^{\mathrm{on}}_{\DReLU}+n(\lambda+\ell)+q_k+q_i
+   +2C^{\mathrm{on}}_{\mathsf{MT}}(f),\\
+R^{\mathrm{on}}_{\mathsf{Inv}}
+ &=R^{\mathrm{on}}_{\DReLU}+2R^{\mathrm{on}}_{\mathsf{MT}}(f)+3.
+\end{aligned}
+\label{eq:inverse-cost}
+\end{equation}
+The three added rounds are the batched B2A conversion and the two dependent
+LUT openings. Rsqrt evaluates two $q_k$-bit LUTs in parallel, instead of one,
+and otherwise has the same dependency graph:
+\begin{equation}
+\begin{aligned}
+C^{\mathrm{off}}_{\mathsf{Rsqrt}}
+ &=nC^{\mathrm{off}}_{\DReLU}
+   +2C^{\mathrm{off}}_{\mathsf{LUT}}(q_k,\ell)
+   +C^{\mathrm{off}}_{\mathsf{LUT}}(q_i,\ell)
+   +2C^{\mathrm{off}}_{\mathsf{MT}}(f),\\
+R^{\mathrm{off}}_{\mathsf{Rsqrt}}
+ &=R^{\mathrm{off}}_{\mathsf{Inv}},\\
+C^{\mathrm{on}}_{\mathsf{Rsqrt}}
+ &=nC^{\mathrm{on}}_{\DReLU}+n(\lambda+\ell)+2q_k+q_i
+   +2C^{\mathrm{on}}_{\mathsf{MT}}(f),\\
+R^{\mathrm{on}}_{\mathsf{Rsqrt}}
+ &=R^{\mathrm{on}}_{\mathsf{Inv}}.
+\end{aligned}
+\label{eq:rsqrt-cost}
+\end{equation}
+
+\paragraph*{LayerNorm}
+For a vector of width $N$, we represent the public reciprocal $1/N$ and the
+affine scale at precision $f$. Computing the mean and variance average then
+uses two scalar exact truncations. The variance stage also evaluates $N$
+parallel square-and-truncate operations, followed by one Rsqrt; normalization
+uses $N$ parallel multiply-and-truncate operations, and applying the public
+affine scale uses $N$ parallel truncations. The public bias is local. Hence
+\begin{equation}
+\begin{aligned}
+C^{\mathrm{off}}_{\mathsf{LayerNorm}}(N)
+ &=2N C^{\mathrm{off}}_{\mathsf{MT}}(f)
+   +(N+2)C^{\mathrm{off}}_{\mathsf{Trunc}}(f)
+   +C^{\mathrm{off}}_{\mathsf{Rsqrt}},\\
+R^{\mathrm{off}}_{\mathsf{LayerNorm}}(N)
+ &=\max\{R^{\mathrm{off}}_{\mathsf{MT}}(f),
+          R^{\mathrm{off}}_{\mathsf{Trunc}}(f),R^{\mathrm{off}}_{\mathsf{Rsqrt}}\},\\
+C^{\mathrm{on}}_{\mathsf{LayerNorm}}(N)
+ &=2N C^{\mathrm{on}}_{\mathsf{MT}}(f)
+   +(N+2)C^{\mathrm{on}}_{\mathsf{Trunc}}(f)
+   +C^{\mathrm{on}}_{\mathsf{Rsqrt}},\\
+R^{\mathrm{on}}_{\mathsf{LayerNorm}}(N)
+ &=2R^{\mathrm{on}}_{\mathsf{MT}}(f)
+   +3R^{\mathrm{on}}_{\mathsf{Trunc}}(f)
+   +R^{\mathrm{on}}_{\mathsf{Rsqrt}}.
+\end{aligned}
+\label{eq:layernorm-cost}
+\end{equation}
+The factor $N$ affects communication but not the depth of a batched vector
+stage. If $1/N$ or the affine scale is exactly representable without
+rescaling, the corresponding truncation term is omitted.
+
+\subsection{Softmax}
+$\Pi_{\mathsf{Softmax}}$ (Algorithm~\ref{alg:softmax}) composes MaxPool,
+Exponentiation, and Inverse. A balanced MaxPool tree over $N$ inputs has
+$N-1$ internal nodes and depth $\lceil\log_2N\rceil$; exponentiations and the
+final products are each batched across all coordinates.
+
+\begin{algorithm}[ht]
+  \caption{Softmax ($\Pi_{\text{Softmax}}$)}
+  \label{alg:softmax}
+  \textbf{Input:} $P_b$ holds $\ashare{\vec{x}}_b$ of length $N$. \\
+  \textbf{Output:} $P_b$ holds $\ashare{\vec{z}}_b$ where $\vec{z}=\text{Softmax}(\vec{x})$.
+  \begin{algorithmic}[1]
+    \State $\ashare{x_{\max}}\leftarrow\Pi_{\mathsf{MaxPool}}(\ashare{\vec{x}})$ using a balanced tree.
+    \For{$i = 0$ to $N-1$ in parallel}
+      \State $\ashare{\delta[i]}\leftarrow\ashare{\vec{x}[i]}-\ashare{x_{\max}}$
+      \State $\ashare{\tilde e[i]}\leftarrow\Pi_{\mathsf{Exp}}(\ashare{\delta[i]})$
+    \EndFor
+    \State $\ashare s\leftarrow\sum_{i=0}^{N-1}\ashare{\tilde e[i]}$, $\ashare r\leftarrow\Pi_{\mathsf{Inv}}(\ashare s)$
+    \For{$i = 0$ to $N-1$ in parallel}
+      \State $\ashare{\vec z[i]}\leftarrow\MulTr(\ashare{\tilde e[i]},\ashare r;f)$
+    \EndFor
+    \State \textbf{return} $\ashare{\vec z}$
+  \end{algorithmic}
+\end{algorithm}
+
+\textbf{Complexity.} Let $q_e$ be the exponentiation-table index width and
+use the Inverse parameters of~\eqref{eq:inverse-cost}. The MaxPool precedes
+the exponentiations, which precede Inverse and the final products. Therefore
+\begin{equation}
+\begin{aligned}
+C^{\mathrm{off}}_{\mathsf{Softmax}}(N)
+ &=C^{\mathrm{off}}_{\mathsf{MaxPool}}(N)
+   +NC^{\mathrm{off}}_{\mathsf{Exp}}(q_e)\\
+ &\quad+C^{\mathrm{off}}_{\mathsf{Inv}}
+   +NC^{\mathrm{off}}_{\mathsf{MT}}(f),\\
+R^{\mathrm{off}}_{\mathsf{Softmax}}(N)
+ &=\max\{R^{\mathrm{off}}_{\mathsf{MaxPool}},
+          R^{\mathrm{off}}_{\mathsf{Exp}}(q_e),\\
+ &\qquad R^{\mathrm{off}}_{\mathsf{Inv}},
+          R^{\mathrm{off}}_{\mathsf{MT}}(f)\},\\
+C^{\mathrm{on}}_{\mathsf{Softmax}}(N)
+ &=C^{\mathrm{on}}_{\mathsf{MaxPool}}(N)
+   +NC^{\mathrm{on}}_{\mathsf{Exp}}(q_e)\\
+ &\quad+C^{\mathrm{on}}_{\mathsf{Inv}}
+   +NC^{\mathrm{on}}_{\mathsf{MT}}(f),\\
+R^{\mathrm{on}}_{\mathsf{Softmax}}(N)
+ &=R^{\mathrm{on}}_{\mathsf{MaxPool}}(N)
+   +R^{\mathrm{on}}_{\mathsf{Exp}}(q_e)
+   +R^{\mathrm{on}}_{\mathsf{Inv}}+R^{\mathrm{on}}_{\mathsf{MT}}(f).
+\end{aligned}
+\label{eq:softmax-cost}
+\end{equation}
+Thus $N$ multiplies communication in the two elementwise stages, while their
+round depth is unchanged by batching. The only logarithmic vector-length term
+is the MaxPool depth.
+
+
+% =====================================================================
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,35 @@
+\begin{table}[t]
+\centering
+\caption{Historical cleartext E0-U-S saturating control: uniform $Q(\ell,s)$ storage for parameters, inputs, intermediate tensors, and logits, with floor-and-saturate encoding, logical 128-bit integer accumulation, and one floor rescaling followed by saturating writeback. These values do not use strict $\mathbb Z_{2^\ell}$ arithmetic. For each $\ell$, $s$ maximizes Top-1 on 512 class-balanced training images, with ties choosing smaller $s$; evaluation uses all 3,925 ImageNette validation images. $\Delta$ is Top-1 minus FP32 in percentage points, and agreement is the percentage of predictions matching FP32. The FP32 reference disables CUDA matmul and cuDNN TF32.}
+\label{tab:e0-uniform}
+\begingroup
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrrrr}
+\toprule
+Model & $\ell$ & $s$ & \shortstack{Top-1\\(\%)} & \shortstack{$\Delta$\\(pp)} & \shortstack{Agreement\\(\%)} \\
+\midrule
+ResNet-50 & 12 & 0 & 0.000 & -75.414 & 0.000 \\
+ & 16 & 12 & 65.554 & -9.860 & 75.924 \\
+ & 20 & 13 & 74.803 & -0.611 & 91.847 \\
+ & 24 & 15 & 75.439 & +0.025 & 97.834 \\
+ & 28 & 20 & 75.389 & -0.025 & 99.949 \\
+ & 32 & 20 & 75.389 & -0.025 & 99.949 \\
+\addlinespace
+ResNet-101 & 12 & 0 & 0.000 & -78.089 & 0.000 \\
+ & 16 & 12 & 62.726 & -15.363 & 72.331 \\
+ & 20 & 14 & 78.599 & +0.510 & 95.873 \\
+ & 24 & 15 & 78.344 & +0.255 & 97.656 \\
+ & 28 & 15 & 78.344 & +0.255 & 97.656 \\
+ & 32 & 15 & 78.344 & +0.255 & 97.656 \\
+\addlinespace
+ResNet-152 & 12 & 0 & 0.000 & -77.478 & 0.000 \\
+ & 16 & 12 & 59.822 & -17.656 & 70.140 \\
+ & 20 & 14 & 77.401 & -0.076 & 95.414 \\
+ & 24 & 15 & 77.605 & +0.127 & 97.707 \\
+ & 28 & 15 & 77.605 & +0.127 & 97.707 \\
+ & 32 & 15 & 77.605 & +0.127 & 97.707 \\
+\bottomrule
+\end{tabular}
+\endgroup
+\end{table}

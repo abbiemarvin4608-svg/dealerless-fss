@@ -1,0 +1,18 @@
+{
+  "generated_utc": "2026-10-19T00:47:41.341812+00:00",
+  "repo": "/home/jiang/dealerless-lunwen",
+  "head": "00dffb8a4e6749999dd7ef8b8c1945ec0dcb556e",
+  "source_files": 927,
+  "source_bytes": 8719707,
+  "github_source_files": 910,
+  "missing_github_source_files": 336,
+  "modified_files_in_inventory_scope": 46,
+  "external_source_files": 23,
+  "missing_required_input_paths": [],
+  "size_semantics": "du -s -B1 allocated bytes; overlapping directories are not additive",
+  "scope": "curated source/experiment roots, required frozen sources and inputs; not a full backup",
+  "git_local_exclude": [
+    "*",
+    "!.gitignore"
+  ]
+}
